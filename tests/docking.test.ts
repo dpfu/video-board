@@ -1,9 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { applySnap, detachModule, findSnap, groupIds, reflow, translate } from '../src/docking';
+import { applySnap, detachModule, dockIndex, findSnap, groupIds, reflow, translate } from '../src/docking';
 import { allCards, mapCards } from '../src/model';
 import { boardFixture } from './board';
 
 describe('modular board behavior', () => {
+  it('resolves a deep mixed assembly from every child without grouping independent views of the same source', () => {
+    const board = boardFixture();
+    for (let i = 0; i < 128; i++) board.clips.push({ id: `clip-${i}`, videoId: 'video', quotationId: 'range', time: 0, x: 0, y: 0, width: 340, z: 5 + i, dock: { to: i ? `clip-${i - 1}` : 'audio', side: 'bottom', offset: 0 } });
+    board.clips.push({ id: 'independent', videoId: 'video', quotationId: 'range', time: 0, x: 900, y: 900, width: 340, z: 140 });
+    const before = structuredClone(board), index = dockIndex(board);
+    for (const id of ['video', 'frames', 'audio', 'clip-0', 'clip-64', 'clip-127']) {
+      expect(index.roots.get(id)).toBe('video');
+      expect(index.groups.get(id)?.size).toBe(131);
+      expect(index.groups.get(id)?.has('independent')).toBe(false);
+      expect(index.groups.get(id)?.has('still')).toBe(false);
+    }
+    expect([...index.groups.get('independent')!]).toEqual(['independent']);
+    expect(board).toEqual(before);
+  });
   it('moves the same assembly from a child header, preserving spacing and unrelated stills', () => {
     const board = boardFixture(), before = structuredClone(board);
     const group = groupIds(board, 'audio');

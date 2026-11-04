@@ -5,16 +5,18 @@ import { ModuleGrip, UndockButton, type DockControls } from './ModuleGrip';
 import { RangeEditor } from './RangeEditor';
 import { clamp, timecode, type ClipCard, type Quotation, type VideoCard } from './model';
 
-export function Clip({ clip, video, quotation, url, urls, poster, active, pinned, busy, dockControls, onHover, onPin, onDrag, onRange, onEditStart, onCapture, onSegment, onJump, onDuplicate, onDelete, onPlayer, onCode, onStop }: {
+export function Clip({ clip, video, quotation, url, urls, poster, active, pinned, busy, dockControls, onHover, onPin, onDrag, onRange, onEditStart, onCapture, onSegment, onJump, onDuplicate, onDelete, onPlayer, onCode, onStop, onRate }: {
   clip: ClipCard; video: VideoCard; quotation: Quotation; url: string; urls: Record<string, string>; active: boolean; pinned: boolean; busy: boolean; dockControls: DockControls;
   onHover: (hover: boolean) => void; onPin: () => void; onDrag: (e: PointerEvent) => void; onRange: (start: number, end: number) => void; onEditStart: () => void;
   onCapture: (time: number) => void; onSegment: (time: number) => void; onJump: (time: number) => void; onDuplicate: () => void; onDelete: () => void; onPlayer: (el: HTMLVideoElement | null) => void;
   onCode: () => void; onStop: () => void;
+  onRate: (rate: number) => void;
   poster?: string;
 }) {
   const element = useRef<HTMLVideoElement | null>(null), bounds = useRef(quotation); bounds.current = quotation;
   const pendingSeek = useRef<number | null>(null), scrubbing = useRef<number | null>(null);
-  const [time, setTime] = useState(quotation.start), [muted, setMuted] = useState(true), [playing, setPlaying] = useState(false), [rate, setRate] = useState(1), [ready, setReady] = useState(false);
+  const [time, setTime] = useState(quotation.start), [muted, setMuted] = useState(true), [playing, setPlaying] = useState(false), [ready, setReady] = useState(false);
+  const rate = clip.rate || 1;
   const position = clamp((time - quotation.start) / (quotation.end - quotation.start), 0, 1);
   const imageHeight = clip.height ? clip.height - 28 - 94 : clamp((clip.width - 2) * video.sourceHeight / video.sourceWidth, 100, 320);
   const thumb = video.thumbnails[Math.min(video.thumbnails.length - 1, Math.floor(quotation.start / video.duration * video.thumbnails.length))];
@@ -65,7 +67,7 @@ export function Clip({ clip, video, quotation, url, urls, poster, active, pinned
     <div className="clip-controls">
       <IconButton icon={playing ? Pause : Play} label={playing ? 'Pause clip' : 'Play clip'} aria-pressed={pinned} onClick={() => { if (!pinned) onPin(); else if (element.current?.paused) void element.current.play(); else element.current?.pause(); }} />
       <span className="player-time">{timecode(time)}</span>
-      <select className="speed" aria-label="Clip playback speed" value={rate} onChange={e => { const value = Number(e.target.value); setRate(value); if (element.current) element.current.playbackRate = value; }}>{[.25, .5, 1, 1.5, 2].map(r => <option key={r} value={r}>{r}×</option>)}</select>
+      <select className="speed" aria-label="Clip playback speed" value={rate} onChange={e => { const value = Number(e.target.value); onRate(value); if (element.current) element.current.playbackRate = value; }}>{[.25, .5, 1, 1.5, 2].map(r => <option key={r} value={r}>{r}×</option>)}</select>
       <IconButton icon={muted ? VolumeX : Volume2} label={muted ? 'Unmute clip' : 'Mute clip'} disabled={!pinned} onClick={() => setMuted(!muted)} />
       {pinned && <IconButton icon={PinOff} label="Stop clip preview" onClick={onStop} />}
       <span className="control-spacer" /><IconButton icon={ScanLine} label="Select segment in clip" onClick={() => onSegment(time)} /><IconButton icon={Camera} label="Capture clip still" disabled={busy} onClick={() => onCapture(time)} />

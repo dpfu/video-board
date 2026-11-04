@@ -43,6 +43,7 @@ Keep it compact, responsive and methodologically useful: **select → code → m
 | Linked clip cards with muted hover preview and editable ranges | Implemented: shot default, independent scrub/playback, shared source data, duplicate views and explicit all-shots action. |
 | Free quotations, whole-video/clip/subsegment coding, region coding, memos and retrieval | Implemented: flat codes, compact assignment popovers, dockable Codes/Quotations/Sources module, ZIP restore and CSV export. |
 | Still-region selection | Implemented: manual, movable/resizable rectangles; retiming preserves geometry, identity, codes and memo across views. |
+| Board performance | Implemented: cached dock index/module rendering, viewport culling and bounded covers. Measured 31–32× faster pan/drag elapsed time on a 240-clip synthetic board; full protocol and smaller-board limits in README. |
 | Browser segmentation for proposing still regions | Deferred by Daniel for the first version; research retained below. |
 
 ## Interface and interaction
@@ -64,6 +65,25 @@ header drag moves the docked assembly; the grip or Alt-drag releases one module;
 Shift suppresses magnets. Detached modules retain their source. Resizing preserves
 neighbours' independent dimensions and moves them with their attached edges.
 Preserve this behavior for future clip and coding modules.
+
+### Performance and offscreen views
+
+Daniel requested a **10× improvement** after the spec implementation. Measure
+against the preceding production build with repeatable real-media workloads;
+do not treat a board-interaction result as a promise about decoding or analysis.
+The [README](README.md#board-performance--4-november-2026) preserves the benchmark
+protocol and measured results: 31–32× faster elapsed time at 240 clips, with
+smaller elapsed gains but more than 10× less main-thread task time at 120 clips.
+
+Offscreen still, track and clip DOM views and their connectors may be culled,
+using **200 screen pixels** of overscan. Their evidence, geometry, source links,
+quotations and export membership remain in the complete board model. Preserve
+source transports, Codes panel state, moving/selected/focused modules and active
+clip playback while panning. Clip speed belongs to its view and survives culling
+and reload. Keep the one-active-clip budget and shared-source/no-video-copy rule.
+Viewport culling must not change docking, source timing or full-board PNG/ZIP
+output. Cached layout/group work and waveform geometry should not be rebuilt
+just because the camera or playback clock moves.
 
 ### Microanimations and tactile feedback
 
@@ -362,3 +382,8 @@ loop is useful.
   The three slices and motion pass are implemented; segmentation and the other
   explicitly deferred features remain outside this prototype. Current checks,
   controls, storage migration and practical limits are recorded in the README.
+- Daniel requested a 10× performance improvement. Repeated dock-graph work and
+  offscreen rendering were the measured bottlenecks. Cached graph/module work,
+  view/connector culling and smaller repeated rendering work are implemented;
+  the README records before/after results and their workload limits. Browser
+  checks cover offscreen playback, evidence and full-board export/restore.

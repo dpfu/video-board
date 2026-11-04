@@ -1,14 +1,14 @@
-import { useMemo, useRef } from 'react';
+import { memo, useMemo, useRef } from 'react';
 import type { CSSProperties, PointerEvent, KeyboardEvent } from 'react';
 import { clamp, timecode, type TrackKind, type VideoCard } from './model';
 import { shotAt, shotRanges } from './scenes';
 
-export function Waveform({ peaks }: { peaks: number[] }) {
+export const Waveform = memo(function Waveform({ peaks }: { peaks: number[] }) {
   const maximum = Math.max(.001, ...peaks);
   const top = peaks.map((v, i) => `${i / (peaks.length - 1) * 1000},${20 - Math.sqrt(v / maximum) * 17}`);
   const bottom = peaks.map((v, i) => `${i / (peaks.length - 1) * 1000},${20 + Math.sqrt(v / maximum) * 17}`).reverse();
   return <svg className="waveform" viewBox="0 0 1000 40" preserveAspectRatio="none" aria-hidden="true"><path d={`M${[...top, ...bottom].join('L')}Z`} fill="currentColor" /></svg>;
-}
+});
 
 export function Timeline({ video, time, urls, stillTimes, mode, onSeek }: {
   video: VideoCard; time: number; urls: Record<string, string>; stillTimes: number[]; mode: TrackKind | 'position'; onSeek: (time: number) => void;

@@ -2,19 +2,33 @@ import { allCards, boardBoxes, DOCK_GAP, mapCards, type Board, type Dock, type M
 
 export type Snap = { id: string; dock: Dock; x: number; y: number; width: number; height: number };
 
-export function rootId(board: Board, id: string) {
+/** Resolve the forest once, rather than rebuilding it for every card's controls. */
+export function dockIndex(board: Board) {
   const cards = new Map(allCards(board).map(c => [c.id, c]));
-  const seen = new Set<string>();
-  let current = id;
-  while (cards.get(current)?.dock && !seen.has(current)) {
-    seen.add(current); current = cards.get(current)!.dock!.to;
+  const roots = new Map<string, string>(), groups = new Map<string, Set<string>>();
+  for (const id of cards.keys()) {
+    const path: string[] = [], seen = new Set<string>();
+    let cursor = id;
+    while (!roots.has(cursor) && cards.get(cursor)?.dock && !seen.has(cursor)) {
+      path.push(cursor); seen.add(cursor); cursor = cards.get(cursor)!.dock!.to;
+    }
+    const root = roots.get(cursor) || cursor; roots.set(id, root);
+    for (const member of path) roots.set(member, root);
+    let group = groups.get(root);
+    if (!group) { group = new Set(); groups.set(root, group); }
+    group.add(id);
   }
-  return current;
+  const byId = new Map<string, Set<string>>();
+  for (const [id, root] of roots) byId.set(id, groups.get(root)!);
+  return { roots, groups: byId };
+}
+
+export function rootId(board: Board, id: string) {
+  return dockIndex(board).roots.get(id) || id;
 }
 
 export function groupIds(board: Board, id: string) {
-  const root = rootId(board, id);
-  return new Set(allCards(board).filter(c => rootId(board, c.id) === root).map(c => c.id));
+  return new Set(dockIndex(board).groups.get(id) || [id]);
 }
 
 /** Detach just this module, leaving its former neighbours in their current places. */

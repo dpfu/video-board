@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { boardBoxes, type Board } from './model';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { clipHeight, type Board } from './model';
 import { captureFrame } from './media';
 
 export const posterKey = (sourceId: string, time: number) => `${sourceId}:${Math.round(time * 1e6)}`;
@@ -8,13 +8,19 @@ export const posterKey = (sourceId: string, time: number) => `${sourceId}:${Math
 export function useClipPosters(board: Board, assets: Map<string, Blob>, viewport: { width: number; height: number }, generation: number) {
   const cache = useRef(new Map<string, string>()), failed = useRef(new Set<string>());
   const [urls, setUrls] = useState<Record<string, string>>({});
-  const visible = boardBoxes(board).filter(c => board.clips.some(clip => clip.id === c.id) &&
-    c.x * board.camera.scale + board.camera.x < viewport.width && (c.x + c.width) * board.camera.scale + board.camera.x > 0 &&
-    c.y * board.camera.scale + board.camera.y < viewport.height && (c.y + c.height) * board.camera.scale + board.camera.y > 0);
-  const requests = visible.flatMap(c => {
-    const clip = board.clips.find(clip => clip.id === c.id)!, q = board.quotations.find(q => q.id === clip.quotationId);
-    return q ? [{ key: posterKey(q.sourceId, q.start), sourceId: q.sourceId, time: q.start }] : [];
-  }).filter((item, i, all) => all.findIndex(other => other.key === item.key) === i).slice(0, 48);
+  const requests = useMemo(() => {
+    const sources = new Map(board.videos.map(v => [v.id, v])), quotes = new Map(board.quotations.map(q => [q.id, q]));
+    const seen = new Set<string>(), requests: { key: string; sourceId: string; time: number }[] = [];
+    const { x, y, scale } = board.camera;
+    for (const c of board.clips) {
+      const source = sources.get(c.videoId), q = quotes.get(c.quotationId);
+      if (!source || !q || c.x * scale + x >= viewport.width || (c.x + c.width) * scale + x <= 0 || c.y * scale + y >= viewport.height || (c.y + clipHeight(c, source)) * scale + y <= 0) continue;
+      const key = posterKey(q.sourceId, q.start);
+      if (!seen.has(key)) { seen.add(key); requests.push({ key, sourceId: q.sourceId, time: q.start }); }
+      if (requests.length === 48) break;
+    }
+    return requests;
+  }, [board.videos, board.quotations, board.clips, board.camera, viewport]);
   const key = requests.map(r => r.key).join('|');
   useEffect(() => {
     for (const url of cache.current.values()) URL.revokeObjectURL(url);

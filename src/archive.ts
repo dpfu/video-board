@@ -73,7 +73,7 @@ function validateBoard(value: unknown): asserts value is Board | V2Board | Legac
     }
     for (const clip of b.clips) {
       const q = b.quotations.find(q => q.id === clip.quotationId), source = b.videos.find(v => v.id === clip.videoId);
-      if (!card(clip) || ids.has(clip.id) || !q || q.kind !== 'range' || !source || q.sourceId !== clip.videoId || !bounded(clip.time, 0, source.duration)) throw new Error('Invalid linked clip view.');
+      if (!card(clip) || ids.has(clip.id) || !q || q.kind !== 'range' || !source || q.sourceId !== clip.videoId || !bounded(clip.time, 0, source.duration) || (clip.rate !== undefined && ![.25, .5, 1, 1.5, 2].includes(clip.rate))) throw new Error('Invalid linked clip view.');
       ids.add(clip.id);
     }
     for (const panel of b.panels) { if (!card(panel) || ids.has(panel.id) || panel.kind !== 'codes' || !bounded(panel.height, 280, 1200)) throw new Error('Invalid codes module.'); ids.add(panel.id); }

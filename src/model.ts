@@ -29,7 +29,7 @@ export type Quotation = {
   title: string; memo: string; codeIds: string[]; createdAt: string; updatedAt: string;
 };
 export type Code = { id: string; name: string; color: string; definition: string };
-export type ClipCard = Card & { videoId: string; quotationId: string; time: number };
+export type ClipCard = Card & { videoId: string; quotationId: string; time: number; rate?: number };
 export type CodesCard = Card & { kind: 'codes'; height: number };
 export type TrackKind = 'filmstrip' | 'waveform' | 'cuts';
 export type TrackCard = Card & { videoId: string; kind: TrackKind; height: number };
@@ -59,6 +59,7 @@ export const videoImageHeight = (video: VideoCard) => video.height ? video.heigh
 export const stillImageHeight = (still: StillCard, video: VideoCard) => still.height ? still.height - HEADER - 24 : (still.width - 2) * video.sourceHeight / video.sourceWidth;
 export const videoHeight = (video: VideoCard) => HEADER + videoImageHeight(video) + 54;
 export const stillHeight = (still: StillCard, video: VideoCard) => HEADER + stillImageHeight(still, video) + 24;
+export const clipHeight = (clip: ClipCard, video: VideoCard) => clip.height || HEADER + clamp((clip.width - 2) * video.sourceHeight / video.sourceWidth, 100, 320) + 94;
 export const allCards = (board: Board): ModuleCard[] => [...board.videos.filter(v => !v.hidden), ...board.stills, ...board.tracks, ...board.clips, ...board.panels];
 export const topZ = (board: Board) => Math.max(0, ...allCards(board).map(v => v.z)) + 1;
 export function mapCards(board: Board, update: (card: ModuleCard) => ModuleCard): Board {
@@ -88,7 +89,7 @@ export function boardBoxes(board: Board) {
     ...board.tracks.map(track => ({ ...track })),
     ...board.clips.flatMap(clip => {
       const video = board.videos.find(v => v.id === clip.videoId);
-      return video ? [{ ...clip, height: clip.height || HEADER + clamp((clip.width - 2) * video.sourceHeight / video.sourceWidth, 100, 320) + 94 }] : [];
+      return video ? [{ ...clip, height: clipHeight(clip, video) }] : [];
     }),
     ...board.panels,
   ];

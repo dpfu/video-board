@@ -30,7 +30,9 @@ export function useBoardMotion(board: Board, stage: RefObject<HTMLDivElement>, e
   useLayoutEffect(() => {
     const boxes = boardBoxes(board), next = new Map(boxes.map(c => [c.id, { x: c.x, y: c.y }]));
     if (ready.current && enabled && !reduced.current) for (const box of boxes) {
-      const el = find(box.id), old = previous.current.get(box.id); if (!el) continue;
+      const old = previous.current.get(box.id);
+      if (old && (manipulating() || (old.x === box.x && old.y === box.y))) continue;
+      const el = find(box.id); if (!el) continue;
       if (!old) {
         transforms.current.get(box.id)?.cancel();
         const animation = el.animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'translateY(0)' }], { ...settle, duration: 200 });

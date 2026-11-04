@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { BookOpen, Check, CircleAlert, Download, FileDown, Film, FolderOpen, Hand, ImageDown, LoaderCircle, Minus, MousePointer2, Plus, Scan, Undo2, X } from 'lucide-react';
 import { IconButton } from './Icons';
@@ -12,7 +12,8 @@ import { csvExport, editQuotation, quotation } from './analysis';
 import { shotAt, shotRanges } from './scenes';
 import { useBoardMotion } from './motion';
 import { posterKey, useClipPosters } from './posters';
-import { applySnap, detachModule, findSnap, groupIds, reflow, rootId, translate, type Snap } from './docking';
+import { visibleModuleIds } from './viewport';
+import { applySnap, detachModule, dockIndex, findSnap, groupIds, reflow, rootId, translate, type Snap } from './docking';
 import { analyzeVideo, captureFrame, detectScenes, probeVideo } from './media';
 import { backupBoard, restoreArchive } from './archive';
 import { exportBoard } from './export';
@@ -67,6 +68,9 @@ export function App() {
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
   const initialised = useRef(false);
   const editingLocked = operation || !loaded;
+  const docks = useMemo(() => dockIndex(board), [board.videos, board.stills, board.tracks, board.clips, board.panels]);
+  const sourceById = useMemo(() => new Map(board.videos.map(v => [v.id, v])), [board.videos]);
+  const quoteById = useMemo(() => new Map(board.quotations.map(q => [q.id, q])), [board.quotations]);
   const motion = useBoardMotion(board, stage, loaded, () => !!gesture.current);
   const posters = useClipPosters(board, assets.current, viewport, epoch.current);
   useEffect(() => {
@@ -305,7 +309,7 @@ export function App() {
     setSelected(id);
   }
   function controlsFor(id: string) {
-    return { docked: groupIds(board, id).size > 1, onPeel: (event: ReactPointerEvent) => begin(event, 'move', id, true), onDetach: () => undock(id) };
+    return { docked: (docks.groups.get(id)?.size || 0) > 1, onPeel: (event: ReactPointerEvent) => begin(event, 'move', id, true), onDetach: () => undock(id) };
   }
   function pan(event: ReactPointerEvent) {
     if (editingLocked || ![0, 1].includes(event.button)) return;
@@ -496,9 +500,65 @@ export function App() {
     finally { setOperation(false); }
   }
 
-  const selectedGroup = selected ? groupIds(board, selected) : new Set<string>();
+  const selectedGroup = useMemo(() => (selected && docks.groups.get(selected)) || new Set<string>(), [selected, docks]);
+  const focusedModule = document.activeElement?.closest('[data-module-id]')?.getAttribute('data-module-id');
+  const visible = useMemo(() => {
+    const keep = new Set(moving);
+    if (selected) keep.add(selected);
+    if (preview) keep.add(preview.id);
+    if (focusedModule) keep.add(focusedModule);
+    return visibleModuleIds(board, viewport, keep);
+  }, [board.videos, board.stills, board.tracks, board.clips, board.panels, board.camera, viewport, selected, moving, preview?.id, focusedModule]);
+  const visibleKey = [...visible].sort().join('|');
   const dockTarget = snap?.dock.to;
   const moduleClass = (id: string) => `${selected === id ? 'is-selected' : ''} ${selectedGroup.size > 1 && selectedGroup.has(id) ? 'is-grouped' : ''} ${moving.has(id) ? 'is-moving' : ''} ${dockTarget === id ? `is-dock-target dock-${snap!.dock.side}` : ''}`;
+  // Camera/saving updates reuse the same module elements. Their handlers read
+  // the current board ref, so panning does not rerender every player and editor.
+  const modules = useMemo(() => <>
+        <svg className="board-links" aria-hidden="true">{[...board.stills, ...board.clips].filter(view => visible.has(view.id)).map(still => {
+          const source = sourceById.get(still.videoId); if (!source || source.hidden) return null;
+          const x1 = source.x + source.width / 2, x2 = still.x + still.width / 2;
+          return <path key={still.id} className={selected === source.id || selected === still.id ? 'is-active' : ''} d={`M ${x1} ${source.y + 14} C ${x1} ${source.y - 40}, ${x2} ${still.y - 40}, ${x2} ${still.y + 14}`} />;
+        })}</svg>
+        {snap && <div className="dock-preview" key={`${snap.dock.to}-${snap.dock.side}`} data-side={snap.dock.side} style={{ left: snap.x, top: snap.y, width: snap.width, height: snap.height }}><span>Dock {snap.dock.side === 'bottom' ? 'below' : snap.dock.side === 'top' ? 'above' : snap.dock.side}</span></div>}
+        {board.videos.filter(v => !v.hidden).map(video => <article key={video.id} className={`board-card video-card ${moduleClass(video.id)}`} data-module-id={video.id} data-video-id={video.id} data-docked-to={video.dock?.to} style={{ left: video.x, top: video.y, width: video.width, zIndex: video.z }}
+          onPointerDown={() => selectModule(video.id)}>
+          <VideoPlayer ref={handle => { if (handle) players.current.set(video.id, handle); else players.current.delete(video.id); }} video={video} url={urls[video.id]} urls={urls} stillTimes={board.stills.filter(s => s.videoId === video.id).map(s => s.time)} busy={busy.has(video.id) || editingLocked}
+            dockControls={controlsFor(video.id)} onAddTrack={kind => addTrack(video.id, kind)} onPatch={patch => patchVideo(video.id, patch)} onCapture={time => void makeStill(video.id, time)} onDelete={() => remove(video.id)} onError={setNotice} onDrag={event => begin(event, 'move', video.id)}
+            onClip={time => createClip(video.id, time)} onAllShots={() => allShots(video.id)} onSegment={time => segment(video.id, sourceQuotationId(video.id), time)} onCode={() => showCoding(sourceQuotationId(video.id))} />
+          <button type="button" className="resize-handle" aria-label="Resize video card" onPointerDown={event => begin(event, 'resize', video.id)} />
+        </article>)}
+        {board.stills.filter(still => visible.has(still.id)).map(still => {
+          const video = sourceById.get(still.videoId); if (!video) return null;
+          return <article key={still.id} className={`board-card still-card ${moduleClass(still.id)}`} data-module-id={still.id} data-still-id={still.id} data-docked-to={still.dock?.to} style={{ left: still.x, top: still.y, width: still.width, zIndex: still.z }} onPointerDown={() => selectModule(still.id)}>
+            <Still still={still} video={video} url={urls[stillAssetId(still)]} dockControls={controlsFor(still.id)} busy={busy.has(still.quotationId || still.id) || editingLocked} onDrag={event => begin(event, 'move', still.id)} onTime={time => void makeStill(video.id, time, still.id)} onJump={() => jump(still)} onDelete={() => remove(still.id)}
+              quotation={quoteById.get(still.quotationId || '')} codes={board.codes} regions={board.quotations.filter(q => q.kind === 'region' && q.parentId === still.quotationId)} selectedRegion={activeQuotation} drawing={drawing === still.id}
+              onDraw={() => { setDrawing(drawing === still.id ? null : still.id); setActiveQuotation(still.quotationId || null); }} onSelectRegion={id => { setActiveQuotation(id); setSelected(still.id); openCodes(); }} onCreateRegion={rect => createRegion(still, rect)} onChangeRegion={(id, rect) => patchQuotation(id, { rect })} onEditStart={checkpoint} onDeleteRegion={id => { const q = board.quotations.find(q => q.id === id); if (q) deleteQuotation(q); }} onCode={() => showCoding(still.quotationId!)} onDuplicate={() => duplicateStill(still)} />
+            <button type="button" className="resize-handle" aria-label="Resize still card" onPointerDown={event => begin(event, 'resize', still.id)} />
+          </article>;
+        })}
+        {board.tracks.filter(track => visible.has(track.id)).map(track => {
+          const video = sourceById.get(track.videoId); if (!video) return null;
+          return <article key={track.id} className={`board-card track-card ${moduleClass(track.id)}`} data-module-id={track.id} data-track-kind={track.kind} data-video-id={video.id} data-docked-to={track.dock?.to} style={{ left: track.x, top: track.y, width: track.width, height: track.height, zIndex: track.z }} onPointerDown={() => setSelected(track.id)}>
+            <Track track={track} video={video} urls={urls} stillTimes={board.stills.filter(s => s.videoId === video.id).map(s => s.time)} dockControls={controlsFor(track.id)} busy={busy.has(video.id) || editingLocked} sceneBusy={sceneBusy.has(video.id) || video.analysis === 'pending'} onRetryScenes={() => scanScenes(video.id)} onThreshold={threshold => { if (video.scenes) patchVideo(video.id, { scenes: { ...video.scenes, threshold } }); }} onDrag={event => begin(event, 'move', track.id)} onSeek={time => players.current.get(video.id)?.seek(time)} onCapture={time => void makeStill(video.id, time)} onDuplicate={() => addTrack(video.id, track.kind, track)} onDelete={() => remove(track.id)} onJump={() => jump({ videoId: video.id, time: players.current.get(video.id)?.time() ?? video.time } as StillCard)} />
+            <button type="button" className="resize-handle" aria-label={`Resize ${track.kind === 'filmstrip' ? 'frames' : track.kind === 'cuts' ? 'cuts' : 'audio'} scrubber`} onPointerDown={event => begin(event, 'resize', track.id)} />
+          </article>;
+        })}
+        {board.clips.filter(clip => visible.has(clip.id)).map(clip => {
+          const video = sourceById.get(clip.videoId), q = quoteById.get(clip.quotationId); if (!video || !q) return null;
+          return <article key={clip.id} className={`board-card clip-card ${moduleClass(clip.id)}`} data-module-id={clip.id} data-clip-id={clip.id} data-quotation-id={q.id} data-docked-to={clip.dock?.to} style={{ left: clip.x, top: clip.y, width: clip.width, zIndex: clip.z }} onPointerDown={() => selectModule(clip.id)}>
+            <Clip clip={clip} video={video} quotation={q} url={urls[video.id]} urls={urls} poster={posters[posterKey(video.id, q.start)]} active={preview?.id === clip.id} pinned={preview?.id === clip.id && preview.pinned} busy={busy.has(video.id) || editingLocked} dockControls={controlsFor(clip.id)}
+              onHover={hover => requestHover(clip.id, hover)} onPin={() => { clearTimeout(hoverTimer.current); setPreview({ id: clip.id, pinned: true }); }} onDrag={e => begin(e, 'move', clip.id)} onRange={(start, end) => patchQuotation(q.id, { start, end })} onEditStart={() => { checkpoint(); stopHover(); setActiveQuotation(q.id); }} onCapture={time => void makeStill(video.id, time)} onSegment={time => segment(video.id, q.id, time)} onJump={time => jump({ videoId: video.id, time } as StillCard)} onDuplicate={() => placeClip(q)} onDelete={() => remove(clip.id)} onPlayer={el => { if (el) clipElements.current.set(clip.id, el); else clipElements.current.delete(clip.id); }} onCode={() => showCoding(q.id)} onStop={() => setPreview(null)} onRate={rate => change(b => ({ ...b, clips: b.clips.map(c => c.id === clip.id ? { ...c, rate } : c) }))} />
+            <button type="button" className="resize-handle" aria-label="Resize clip card" onPointerDown={e => begin(e, 'resize', clip.id)} />
+          </article>;
+        })}
+        {board.panels.map(panel => <article key={panel.id} className={`board-card codes-card ${moduleClass(panel.id)}`} data-module-id={panel.id} data-docked-to={panel.dock?.to} style={{ left: panel.x, top: panel.y, width: panel.width, height: panel.height, zIndex: panel.z }}>
+          <Coding board={board} target={board.quotations.find(q => q.id === activeQuotation)} draft={draft} dockControls={controlsFor(panel.id)} onDrag={e => begin(e, 'move', panel.id)} onClose={() => remove(panel.id)} onEditStart={checkpoint} onEditQuotation={patchQuotation} onAddCode={addCode} onEditCode={(id, patch) => change(b => ({ ...b, codes: b.codes.map(c => c.id === id ? { ...c, ...patch } : c) }))} onAssign={assignCode} onReveal={reveal} onPlace={placeClip} onDeleteQuotation={deleteQuotation} onDraft={setDraft} onSaveDraft={saveSegment} onCancelDraft={() => setDraft(null)} onSource={id => { const q = board.quotations.find(q => q.id === sourceQuotationId(id)); if (q) reveal(q); }} />
+          <button type="button" className="resize-handle" aria-label="Resize codes module" onPointerDown={e => begin(e, 'resize', panel.id)} />
+        </article>)}
+  </>, [board.videos, board.stills, board.tracks, board.clips, board.panels,
+    board.quotations, board.codes, urls, posters, selected, selectedGroup, moving,
+    snap, sceneBusy, busy, editingLocked, preview, activeQuotation, drawing, draft, visibleKey]);
   return <div className="app">
     <header className="toolbar">
       <div className="brand"><span className="brand-icon"><Film size={21} /></span><strong>Video Board</strong><span className="prototype">prototype</span></div>
@@ -530,47 +590,7 @@ export function App() {
         void importVideos(Array.from(event.dataTransfer.files), { x: (event.clientX - box.left - c.x) / c.scale, y: (event.clientY - box.top - c.y) / c.scale });
       }}>
       <div className="board-world" style={{ transform: `translate(${board.camera.x}px, ${board.camera.y}px) scale(${board.camera.scale})` }}>
-        <svg className="board-links" aria-hidden="true">{[...board.stills, ...board.clips].map(still => {
-          const source = board.videos.find(v => v.id === still.videoId); if (!source || source.hidden) return null;
-          const x1 = source.x + source.width / 2, x2 = still.x + still.width / 2;
-          return <path key={still.id} className={selected === source.id || selected === still.id ? 'is-active' : ''} d={`M ${x1} ${source.y + 14} C ${x1} ${source.y - 40}, ${x2} ${still.y - 40}, ${x2} ${still.y + 14}`} />;
-        })}</svg>
-        {snap && <div className="dock-preview" key={`${snap.dock.to}-${snap.dock.side}`} data-side={snap.dock.side} style={{ left: snap.x, top: snap.y, width: snap.width, height: snap.height }}><span>Dock {snap.dock.side === 'bottom' ? 'below' : snap.dock.side === 'top' ? 'above' : snap.dock.side}</span></div>}
-        {board.videos.filter(v => !v.hidden).map(video => <article key={video.id} className={`board-card video-card ${moduleClass(video.id)}`} data-module-id={video.id} data-video-id={video.id} data-docked-to={video.dock?.to} style={{ left: video.x, top: video.y, width: video.width, zIndex: video.z }}
-          onPointerDown={() => selectModule(video.id)}>
-          <VideoPlayer ref={handle => { if (handle) players.current.set(video.id, handle); else players.current.delete(video.id); }} video={video} url={urls[video.id]} urls={urls} stillTimes={board.stills.filter(s => s.videoId === video.id).map(s => s.time)} busy={busy.has(video.id) || editingLocked}
-            dockControls={controlsFor(video.id)} onAddTrack={kind => addTrack(video.id, kind)} onPatch={patch => patchVideo(video.id, patch)} onCapture={time => void makeStill(video.id, time)} onDelete={() => remove(video.id)} onError={setNotice} onDrag={event => begin(event, 'move', video.id)}
-            onClip={time => createClip(video.id, time)} onAllShots={() => allShots(video.id)} onSegment={time => segment(video.id, sourceQuotationId(video.id), time)} onCode={() => showCoding(sourceQuotationId(video.id))} />
-          <button type="button" className="resize-handle" aria-label="Resize video card" onPointerDown={event => begin(event, 'resize', video.id)} />
-        </article>)}
-        {board.stills.map(still => {
-          const video = board.videos.find(v => v.id === still.videoId); if (!video) return null;
-          return <article key={still.id} className={`board-card still-card ${moduleClass(still.id)}`} data-module-id={still.id} data-still-id={still.id} data-docked-to={still.dock?.to} style={{ left: still.x, top: still.y, width: still.width, zIndex: still.z }} onPointerDown={() => selectModule(still.id)}>
-            <Still still={still} video={video} url={urls[stillAssetId(still)]} dockControls={controlsFor(still.id)} busy={busy.has(still.quotationId || still.id) || editingLocked} onDrag={event => begin(event, 'move', still.id)} onTime={time => void makeStill(video.id, time, still.id)} onJump={() => jump(still)} onDelete={() => remove(still.id)}
-              quotation={board.quotations.find(q => q.id === still.quotationId)} codes={board.codes} regions={board.quotations.filter(q => q.kind === 'region' && q.parentId === still.quotationId)} selectedRegion={activeQuotation} drawing={drawing === still.id}
-              onDraw={() => { setDrawing(drawing === still.id ? null : still.id); setActiveQuotation(still.quotationId || null); }} onSelectRegion={id => { setActiveQuotation(id); setSelected(still.id); openCodes(); }} onCreateRegion={rect => createRegion(still, rect)} onChangeRegion={(id, rect) => patchQuotation(id, { rect })} onEditStart={checkpoint} onDeleteRegion={id => { const q = board.quotations.find(q => q.id === id); if (q) deleteQuotation(q); }} onCode={() => showCoding(still.quotationId!)} onDuplicate={() => duplicateStill(still)} />
-            <button type="button" className="resize-handle" aria-label="Resize still card" onPointerDown={event => begin(event, 'resize', still.id)} />
-          </article>;
-        })}
-        {board.tracks.map(track => {
-          const video = board.videos.find(v => v.id === track.videoId); if (!video) return null;
-          return <article key={track.id} className={`board-card track-card ${moduleClass(track.id)}`} data-module-id={track.id} data-track-kind={track.kind} data-video-id={video.id} data-docked-to={track.dock?.to} style={{ left: track.x, top: track.y, width: track.width, height: track.height, zIndex: track.z }} onPointerDown={() => setSelected(track.id)}>
-            <Track track={track} video={video} urls={urls} stillTimes={board.stills.filter(s => s.videoId === video.id).map(s => s.time)} dockControls={controlsFor(track.id)} busy={busy.has(video.id) || editingLocked} sceneBusy={sceneBusy.has(video.id) || video.analysis === 'pending'} onRetryScenes={() => scanScenes(video.id)} onThreshold={threshold => { if (video.scenes) patchVideo(video.id, { scenes: { ...video.scenes, threshold } }); }} onDrag={event => begin(event, 'move', track.id)} onSeek={time => players.current.get(video.id)?.seek(time)} onCapture={time => void makeStill(video.id, time)} onDuplicate={() => addTrack(video.id, track.kind, track)} onDelete={() => remove(track.id)} onJump={() => jump({ videoId: video.id, time: players.current.get(video.id)?.time() ?? video.time } as StillCard)} />
-            <button type="button" className="resize-handle" aria-label={`Resize ${track.kind === 'filmstrip' ? 'frames' : track.kind === 'cuts' ? 'cuts' : 'audio'} scrubber`} onPointerDown={event => begin(event, 'resize', track.id)} />
-          </article>;
-        })}
-        {board.clips.map(clip => {
-          const video = board.videos.find(v => v.id === clip.videoId), q = board.quotations.find(q => q.id === clip.quotationId); if (!video || !q) return null;
-          return <article key={clip.id} className={`board-card clip-card ${moduleClass(clip.id)}`} data-module-id={clip.id} data-clip-id={clip.id} data-quotation-id={q.id} data-docked-to={clip.dock?.to} style={{ left: clip.x, top: clip.y, width: clip.width, zIndex: clip.z }} onPointerDown={() => selectModule(clip.id)}>
-            <Clip clip={clip} video={video} quotation={q} url={urls[video.id]} urls={urls} poster={posters[posterKey(video.id, q.start)]} active={preview?.id === clip.id} pinned={preview?.id === clip.id && preview.pinned} busy={busy.has(video.id) || editingLocked} dockControls={controlsFor(clip.id)}
-              onHover={hover => requestHover(clip.id, hover)} onPin={() => { clearTimeout(hoverTimer.current); setPreview({ id: clip.id, pinned: true }); }} onDrag={e => begin(e, 'move', clip.id)} onRange={(start, end) => patchQuotation(q.id, { start, end })} onEditStart={() => { checkpoint(); stopHover(); setActiveQuotation(q.id); }} onCapture={time => void makeStill(video.id, time)} onSegment={time => segment(video.id, q.id, time)} onJump={time => jump({ videoId: video.id, time } as StillCard)} onDuplicate={() => placeClip(q)} onDelete={() => remove(clip.id)} onPlayer={el => { if (el) clipElements.current.set(clip.id, el); else clipElements.current.delete(clip.id); }} onCode={() => showCoding(q.id)} onStop={() => setPreview(null)} />
-            <button type="button" className="resize-handle" aria-label="Resize clip card" onPointerDown={e => begin(e, 'resize', clip.id)} />
-          </article>;
-        })}
-        {board.panels.map(panel => <article key={panel.id} className={`board-card codes-card ${moduleClass(panel.id)}`} data-module-id={panel.id} data-docked-to={panel.dock?.to} style={{ left: panel.x, top: panel.y, width: panel.width, height: panel.height, zIndex: panel.z }}>
-          <Coding board={board} target={board.quotations.find(q => q.id === activeQuotation)} draft={draft} dockControls={controlsFor(panel.id)} onDrag={e => begin(e, 'move', panel.id)} onClose={() => remove(panel.id)} onEditStart={checkpoint} onEditQuotation={patchQuotation} onAddCode={addCode} onEditCode={(id, patch) => change(b => ({ ...b, codes: b.codes.map(c => c.id === id ? { ...c, ...patch } : c) }))} onAssign={assignCode} onReveal={reveal} onPlace={placeClip} onDeleteQuotation={deleteQuotation} onDraft={setDraft} onSaveDraft={saveSegment} onCancelDraft={() => setDraft(null)} onSource={id => { const q = board.quotations.find(q => q.id === sourceQuotationId(id)); if (q) reveal(q); }} />
-          <button type="button" className="resize-handle" aria-label="Resize codes module" onPointerDown={e => begin(e, 'resize', panel.id)} />
-        </article>)}
+        {modules}
       </div>
       {!board.videos.length && <div className="empty-board">
         <div className="empty-board__icon"><Film size={34} strokeWidth={1.2} /><span><Plus size={13} /></span></div>

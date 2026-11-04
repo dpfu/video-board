@@ -39,20 +39,24 @@ For a shorter iteration, use `npm test` or `npm run test:watch`; `npm run test:e
 builds and runs just the browser workflows. Browser tests start a separate server
 on **4193** and use fresh contexts, leaving the working board on **5193** alone.
 
-- **27 Vitest checks:** group movement, detaching, independent resizing, docking
+- **30 Vitest checks:** group movement, detaching, independent resizing, docking
   on four sides and at different zoom levels, legacy v1 migration, persistence
   and atomic rollback after a simulated storage failure; native FFmpeg score
   parity on 8/10-bit sequences, reusable buffers, geometry changes, 16-bit
   normalization, exact shot boundaries and browser luma preprocessing; retiming
-  coded regions, parent trimming, shared media/quotations, CSV and v2 migration.
-- **9 Chromium workflows:** real-media import and analysis; synchronized resized
+  coded regions, parent trimming, shared media/quotations, CSV and v2 migration;
+  deep mixed dock assemblies and viewport/zoom/overscan selection without edits
+  to the underlying evidence.
+- **10 Chromium workflows:** real-media import and analysis; synchronized resized
   scrubbers and exact linked-still recapture; magnetic group interactions, Undo
   and reload; ZIP roundtrip, rejected incomplete backups and offscreen PNG export;
   known-cut detection, cached threshold adjustment, shot seeking and older boards;
   muted independent clip loops, precise range edits and explicit all-shot clips;
   compact coding popovers, source/clip/subsegment/frame/region coding, retrieval,
   code renaming, CSV and v3 ZIP validation/reopen; retiming, moving/resizing and
-  duplicating coded regions; interrupting settling motion and reduced motion.
+  duplicating coded regions; interrupting settling motion and reduced motion;
+  offscreen culling while retaining pinned playback, speed, codes/memos and
+  full-board PNG/ZIP export, restore and reload.
 
 The versioned [synthetic fixture](e2e/fixtures/README.md) contains no private media.
 Browser workflows use the actual decoder, workers and IndexedDB. The unit storage
@@ -60,16 +64,78 @@ checks use `fake-indexeddb`. Disposable reports, downloads and failure traces go
 under ignored `tmp/playwright/`; open the HTML report with
 `npx playwright show-report tmp/playwright/report`.
 
-Verified on **bugglzwerg, 4 November 2026** after implementing the agreed analysis
-spec and motion pass: `npm run check` passed all **36 checks** and the production
-build. The browser portion took about **34 seconds**. Visual inspection covered
-the clip/coding board, retimed rectangular regions and their PNG exports.
+Verified on **bugglzwerg, 4 November 2026** after the performance pass:
+`npm run check` passed all **40 checks** and the production build. The browser
+portion took about **37 seconds**. The preceding analysis-spec/motion pass
+passed 36 checks in about 34 seconds; its visual inspection covered the
+clip/coding board, retimed rectangular regions and their PNG exports.
 The earlier shot-detector suite passed 28 checks in about 15 seconds; its visual
 inspection covered the resized Cuts module and PNG export. The initial
 pre-detector suite passed 18 checks in about 11 seconds after correcting a runner
 viewport mismatch.
 Automated coverage currently targets Chromium with VP9/Opus, not a codec/browser
 compatibility matrix.
+
+## Board performance · 4 November 2026
+
+Daniel requested a **10× performance improvement**. Against the preceding
+`c08fff4` build, the measured 240-clip pan/drag workloads improve **31–32× in
+elapsed time**. At 120 clips, elapsed time improves **3.7–3.9×**; Chromium's
+recorded main-thread task time improves **28–42×**. These measurements cover
+board interaction, not video decoding or scene-detection throughput.
+
+| Clips | Gesture | Elapsed before → after | Speedup | Main-thread task time before → after | Task-time reduction |
+| --- | --- | --- | --- | --- | --- |
+| 120 | Pan | 5.60 s → 1.51 s | 3.7× | 4,828 ms → 114 ms | 42.3× |
+| 120 | Drag docked player/Frames/Audio | 6.07 s → 1.55 s | 3.9× | 4,931 ms → 178 ms | 27.8× |
+| 240 | Pan | 47.70 s → 1.55 s | 30.8× | 47,308 ms → 118 ms | 399.9× |
+| 240 | Drag docked player/Frames/Audio | 49.02 s → 1.53 s | 32.1× | 48,686 ms → 189 ms | 257.1× |
+
+Protocol: **Apple M4**, macOS arm64, headless **Chromium 147.0.7727.15**,
+production builds, 1440×1000 viewport and reduced motion. Each board has one
+actual [synthetic source](e2e/fixtures/README.md), its two original docked
+scrubbers, and 120 or 240 distinct range quotations/clip views arranged in a
+12-column grid. The clip views share the original video and four starting-frame
+cover keys. Import/analysis and visible covers finish before timing. Each
+gesture has one warm-up trial and three measured trials; the table reports
+medians. A trial sends 60 real pointer moves around a small oval returning to
+the starting position, awaiting an animation frame after each move. Elapsed
+time includes those frame waits and browser-driver overhead; task time is the
+delta of Chromium's `Performance.getMetrics` `TaskDuration`. This is a warm,
+mostly offscreen board workload, not a long-video, cold-import or all-cards-
+visible benchmark. Browser, hardware, layout and visible content affect gains.
+
+The main bottleneck was rebuilding the dock graph for every card, including
+offscreen cards, on every pointer update. The implementation now resolves dock
+roots/groups once per board-layout change, reuses module elements during pure
+camera updates and uses indexed source/quotation lookups. It renders still,
+track and clip views plus their connectors only inside the viewport with
+**200 screen pixels** of overscan. In these runs, mounted modules fall from
+123/243 to **15**. Source players and Codes panels remain mounted; moving,
+selected, focused and active-preview views also stay alive. Clip playback speed
+is saved with its view so culling/reopening cannot reset it.
+
+Cover selection is a linear scan with deduplication; unchanged cards skip
+motion DOM queries and waveform geometry is reused during playback. These
+changes do not remove board objects or copy media. PNG/ZIP export still reads
+the complete board model, including offscreen quotations and assets.
+
+Rerun independently of Daniel's working browser:
+
+```sh
+npm run benchmark -- --output tmp/performance/latest.json --sizes 120,240 --runs 3 --steps 60
+```
+
+[scripts/benchmark.mjs](scripts/benchmark.mjs) starts its own production server
+on **4193** and uses a disposable browser. Keep that port free and run it
+separately from browser tests/builds. Raw baseline, intermediate and final
+reports are retained locally under ignored `tmp/performance/`; this section
+preserves the protocol and measured results. Reports record individual trials,
+median task/script/layout time, frame intervals, browser and bundle identity.
+The measured baseline bundle was `index-CbnMUxWt.js` (SHA-256
+`ce6f2cda075e04c85bf2e30b09be4806833e3d6c64ced7be50968bc136840b80`);
+the optimized bundle was `index-GG5xCu3a.js` (SHA-256
+`11d43fb4acd8a6d598d24313a55c67071b307755751b85a9bb144e0a25200fb5`).
 
 ## Linked analysis and motion · 4 November 2026
 
@@ -134,9 +200,9 @@ cancellable worker queue captures visible **320px** covers after a 100ms quiet
 period; up to **48** shared images are cached. Hover intent is 120ms. Inactive
 clip cards have no video decoder, and obsolete cover requests are terminated on
 retiming. Covers regenerate after reload and are not added to project backups.
-These bounds keep the prototype modest; representative large-project and
-cross-browser performance benchmarks remain to be done. Native browser looping
-can have a short seek seam at its boundary.
+The board benchmark above covers 120/240 clip views of one synthetic source;
+representative research media and cross-browser benchmarks remain to be done.
+Native browser looping can have a short seek seam at its boundary.
 
 Schema **v3** saves quotations, codes, memos, clip views and the Codes module.
 v1/v2 projects migrate without replacing media IDs or still positions/times.

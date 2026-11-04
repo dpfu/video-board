@@ -81,7 +81,7 @@ test('shot clips preview silently and independently; duplicate views share codin
   await page.reload(); await expect(page.locator('.clip-card')).toHaveCount(2); await waitSaved(page);
   expect((await savedBoard(page)).codes).toEqual(state.codes);
   await page.getByRole('button', { name: 'Create clips from all shots', exact: true }).click();
-  await expect(page.locator('.clip-card')).toHaveCount(7); await waitSaved(page);
+  await expect.poll(async () => (await savedBoard(page)).clips.length).toBe(7); await waitSaved(page);
   expect((await savedBoard(page)).quotations.filter(q => q.kind === 'range' && q.id !== qid && q.parentId !== qid).map(q => [q.start, q.end])).toEqual([[0, 1], [1, 2], [2, 3], [3, 4], [4, 5]]);
   await page.getByRole('button', { name: 'Undo last edit', exact: true }).click();
   await expect(page.locator('.clip-card')).toHaveCount(2); await waitSaved(page);

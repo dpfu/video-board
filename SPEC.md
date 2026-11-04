@@ -1,6 +1,7 @@
 # Video Board — working specification
 
-Updated **4 November 2026**, from the discussion with Daniel. This is the single
+Updated **5 November 2026**, preserving Daniel's 4 November decisions and the
+5 November exploratory pass. This is the single
 home for product decisions, proposed behavior and open questions. Update it as
 the discussion develops; preserve corrections and their rationale. The
 [README](README.md) is the minimal public entrypoint; the
@@ -48,6 +49,69 @@ Keep it compact, responsive and methodologically useful: **select → code → m
 | Still-region selection | Implemented: manual, movable/resizable rectangles; retiming preserves geometry, identity, codes and memo across views. |
 | Board performance | Implemented: cached dock index/module rendering, viewport culling and bounded covers. Measured 31–32× faster pan/drag elapsed time on a 240-clip synthetic board; full protocol and smaller-board limits in development notes. |
 | Browser segmentation for proposing still regions | Deferred by Daniel for the first version; research retained below. |
+
+## Exploratory pass · 5 November 2026
+
+Reviewed the live **v0.0.1** build, commit **b923ee7**, in isolated Chromium
+sessions. Used generated H.264/AAC landscape, silent H.264 portrait and VP9
+known-cut videos. Built a board with **3 sources, 3 stills, 4 image regions,
+7 clip views, 18 quotations and 3 codes**. No research media or existing working
+browser storage was used. Disposable evidence is local under
+`tmp/full-pass-2026-11-05/` (screenshots, CSV/PNG/ZIP, board snapshots and
+`observations.json`).
+
+The core loop worked: source playback/speed/mute/loop; Frames/Audio scrubbing;
+still capture, frame stepping, duplicate views and shared retiming; drawing,
+moving/resizing and keyboard editing regions; coding/memos and code retrieval;
+independent muted clip hover and explicit playback; nested source-time segments;
+shot-default and all-shot clips; cached threshold edits; magnetic detaching,
+resizing and redocking; source hiding/reopening; and export/reload. Region
+geometry/identity/codes/memos survived retiming. Trimming a parent retained its
+subsegment's source boundaries. A fresh-session ZIP restore retained quotations,
+codes, stills and clips exactly; CSV covered every quotation/assignment and the
+ZIP original matched the input bytes. Invalid video/ZIP input preserved the
+working board. No browser/runtime errors or failed HTTP responses were observed.
+
+**Open findings, reproduced on that build.** These are proposed priorities for
+the next implementation pass, not completed fixes or new scope agreements:
+
+1. **Keyboard Undo is inconsistent.** Duplicate a clip with its action button,
+   then press Cmd+Z while the button retains focus: no Undo occurs. Move a
+   module, focus an image region and press Cmd+Shift+Z: the supposed Redo
+   shortcut instead undoes the move. The toolbar Undo works. Correct shortcut
+   routing in `src/App.tsx`; preserve native text-field Undo and avoid treating
+   Shift+Cmd/Ctrl+Z as another Undo. Add regressions for both focus contexts.
+2. **Coding is not consistently visible.** Whole-video and clip assignments
+   persist and appear in the inspector/CSV, but their cards show no code names.
+   PNG export omits clip code names and, when a region has a title, exports only
+   that title instead of its code names. The legend counts do not identify each
+   assignment. Keep compact code feedback consistent across players, clips,
+   stills and regions, including `src/export.ts` output.
+3. **Reveal must make the target accessible.** Pan the existing Codes module
+   offscreen and press **Open codes and quotations**: it remains offscreen.
+   Retrieve a region whose still lies behind later cards: it selects/highlights
+   that still without raising it, so another card still covers the region.
+   Review `openCodes`, `reveal` and `jump` in `src/App.tsx` for appropriate focus,
+   camera placement and stacking. A closed/reopened Codes module is accessible.
+4. **Code creation behaves differently between entry points.** Enter an
+   existing code name in the Codes module: it creates another ID with the same
+   name and can assign both to one quotation. The compact coding popover reuses
+   the existing code instead. Reuse that behavior for panel creation; preserve
+   existing distinct code identities rather than merging historical data
+   implicitly.
+5. **Default placement obscures existing work.** Importing another video stacks
+   it over earlier players/stills; creating clips and the all-shot batch can
+   cover the Codes module and existing stills. Inspect `importVideos`,
+   `placeClip` and `makeStill` in `src/App.tsx`. Prefer a nearby unoccupied area
+   for new views while preserving every existing module's saved position.
+
+Further polish observed: corrupt ZIP errors expose JSZip's internal message and
+documentation URL; provide a clear backup error with reassurance that the board
+is intact. Fixed quarter-position timeline ticks truncate fractional seconds
+(for a 5-second video, positions 1.25/2.5/3.75 read 00:01/00:02/00:03); use clear
+tick intervals or suitable precision. Review tiny labels/handles at board zoom
+without expanding padding throughout the interface. This pass covers short
+generated clips in Chromium, not a general browser/codec/long-video matrix.
 
 ## Interface and interaction
 

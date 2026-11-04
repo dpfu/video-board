@@ -6,7 +6,8 @@ browser with him. No test suite is requested at this stage. Run the TypeScript /
 production build and check changed interactions directly in the browser.
 
 Preserve local-first behavior and the separate `video-board` IndexedDB database.
-Use Folder Sort's palette and Lucide conventions. Do not change Folder Sort as
+Use the compact graphite/grey modular design requested by Daniel, with Lucide
+icons. The earlier green Folder Sort palette is superseded. Do not change Folder Sort as
 part of this experiment. Research media and private data must not enter Git.
 Keep QA clips, screenshots and other disposable material in ignored `tmp/`.
 

@@ -4,15 +4,17 @@ import { Check, CircleAlert, Download, Film, FolderOpen, Hand, ImageDown, Loader
 import { IconButton } from './Icons';
 import { VideoPlayer, type PlayerHandle } from './VideoPlayer';
 import { Still } from './Still';
+import { Track } from './Track';
+import { applySnap, detachModule, findSnap, groupIds, reflow, rootId, translate, type Snap } from './docking';
 import { analyzeVideo, captureFrame, probeVideo } from './media';
 import { backupBoard, restoreArchive } from './archive';
 import { exportBoard } from './export';
 import { download, safeFilename } from './download';
 import { loadBoard, replaceBoard, saveAssets, saveBoard } from './store';
-import { boardBoxes, clamp, emptyBoard, topZ, type Board, type Camera, type Point, type StillCard, type VideoCard } from './model';
+import { allCards, boardBoxes, clamp, DOCK_GAP, emptyBoard, mapCards, topZ, type Board, type Camera, type Dock, type ModuleCard, type Point, type StillCard, type TrackCard, type TrackKind, type VideoCard } from './model';
 
-type Gesture = { pointer: number; x: number; y: number; kind: 'move' | 'resize' | 'pan'; id?: string; origin: Point & { width?: number }; scale: number };
-type Removed = { videos: VideoCard[]; stills: StillCard[] };
+type Gesture = { pointer: number; x: number; y: number; kind: 'move' | 'resize' | 'pan'; id?: string; origin: Point & { width?: number; height?: number }; scale: number; originals?: Map<string, ModuleCard>; moving?: Set<string>; root?: string };
+type Removed = { videos: VideoCard[]; stills: StillCard[]; tracks: TrackCard[]; docks: Map<string, Dock> };
 
 export function App() {
   const [board, setBoard] = useState<Board>(emptyBoard);
@@ -33,6 +35,9 @@ export function App() {
   const [dragOver, setDragOver] = useState(false);
   const [removed, setRemoved] = useState<Removed | null>(null);
   const [operation, setOperation] = useState(false);
+  const [snap, setSnap] = useState<Snap | null>(null);
+  const snapRef = useRef<Snap | null>(null);
+  const [moving, setMoving] = useState(new Set<string>());
   const stage = useRef<HTMLDivElement>(null);
   const videoInput = useRef<HTMLInputElement>(null);
   const archiveInput = useRef<HTMLInputElement>(null);
@@ -93,7 +98,8 @@ export function App() {
         const blob = stored.get(video.id); if (blob) processVideo(video.id, blob);
       }
     }).catch(error => setFatal(`The local board could not be opened: ${error.message}`));
-    return () => { for (const url of Object.values(objectUrls.current)) URL.revokeObjectURL(url); };
+    // These URLs live for the page lifetime; replacing an asset revokes its old
+    // URL. Revoking on effect cleanup would break live video seeking during HMR.
   }, []);
 
   useEffect(() => {
@@ -115,25 +121,33 @@ export function App() {
       if (!g || g.pointer !== event.pointerId) return;
       const dx = (event.clientX - g.x) / g.scale, dy = (event.clientY - g.y) / g.scale;
       if (g.kind === 'pan') change(b => ({ ...b, camera: { ...b.camera, x: g.origin.x + dx, y: g.origin.y + dy } }));
-      else change(b => {
-        const update = <T extends VideoCard | StillCard>(card: T): T => card.id !== g.id ? card : g.kind === 'move'
-          ? { ...card, x: g.origin.x + dx, y: g.origin.y + dy }
-          : { ...card, width: clamp((g.origin.width || 300) + dx, b.videos.some(v => v.id === card.id) ? 360 : 260, 1000) };
-        return { ...b, videos: b.videos.map(update), stills: b.stills.map(update) };
+      else if (g.kind === 'move') change(b => {
+        const next = translate(b, g.originals!, { x: dx, y: dy });
+        const candidate = event.shiftKey ? null : findSnap(next, g.moving!, g.root!);
+        snapRef.current = candidate; setSnap(candidate); return next;
       });
+      else change(b => reflow(mapCards(b, card => {
+        if (card.id !== g.id) return card;
+        const track = b.tracks.some(t => t.id === card.id), video = b.videos.some(v => v.id === card.id);
+        return { ...card, width: clamp((g.origin.width || 300) + dx, track ? 240 : video ? 320 : 260, 1600), height: clamp((g.origin.height || 100) + dy, track ? 72 : video ? 190 : 110, track ? 600 : 1200) };
+      })));
     };
-    const finish = () => { gesture.current = null; document.body.classList.remove('is-dragging'); };
+    const finish = (commit: boolean) => {
+      if (commit && gesture.current?.kind === 'move' && snapRef.current) change(b => applySnap(b, snapRef.current!));
+      gesture.current = null; snapRef.current = null; setSnap(null); setMoving(new Set()); document.body.classList.remove('is-dragging');
+    };
+    const pointerUp = (event: PointerEvent) => finish(!event.shiftKey), pointerCancel = () => finish(false);
     const down = (event: KeyboardEvent) => {
       if ((event.target as Element)?.closest('input, select, textarea, button, a')) return;
       if (event.code === 'Space') { event.preventDefault(); setSpace(true); }
       if (event.key === 'Escape') { setSelected(null); setHand(false); }
     };
     const up = (event: KeyboardEvent) => { if (event.code === 'Space') setSpace(false); };
-    const blur = () => { setSpace(false); finish(); };
-    window.addEventListener('pointermove', move); window.addEventListener('pointerup', finish); window.addEventListener('pointercancel', finish);
+    const blur = () => { setSpace(false); finish(false); };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', pointerUp); window.addEventListener('pointercancel', pointerCancel);
     window.addEventListener('keydown', down); window.addEventListener('keyup', up); window.addEventListener('blur', blur);
     return () => {
-      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', finish); window.removeEventListener('pointercancel', finish);
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', pointerUp); window.removeEventListener('pointercancel', pointerCancel);
       window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', blur);
     };
   }, []);
@@ -170,14 +184,25 @@ export function App() {
     const camera: Camera = { scale, x: (viewport.width - w * scale) / 2 - minX * scale, y: (viewport.height - h * scale) / 2 - minY * scale };
     change(b => ({ ...b, camera }));
   }
-  function begin(event: ReactPointerEvent, kind: 'move' | 'resize', id: string) {
-    if (editingLocked || event.button !== 0 || (kind === 'move' && (event.target as Element).closest('button, input, select'))) return;
+  function begin(event: ReactPointerEvent, kind: 'move' | 'resize', id: string, independent = false) {
+    if (editingLocked || event.button !== 0 || (kind === 'move' && !independent && (event.target as Element).closest('button, input, select'))) return;
     event.preventDefault(); event.stopPropagation();
-    const card = [...current.current.videos, ...current.current.stills].find(c => c.id === id); if (!card) return;
-    gesture.current = { pointer: event.pointerId, x: event.clientX, y: event.clientY, kind, id, origin: { x: card.x, y: card.y, width: card.width }, scale: current.current.camera.scale };
+    const base = kind === 'move' && (independent || event.altKey) ? detachModule(current.current, id) : current.current;
+    const card = boardBoxes(base).find(c => c.id === id); if (!card) return;
+    const ids = kind === 'move' ? groupIds(base, id) : new Set([id]);
+    const originals = new Map(allCards(base).filter(c => ids.has(c.id)).map(c => [c.id, c]));
+    gesture.current = { pointer: event.pointerId, x: event.clientX, y: event.clientY, kind, id, origin: { x: card.x, y: card.y, width: card.width, height: card.height }, scale: base.camera.scale, originals, moving: ids, root: rootId(base, id) };
     event.currentTarget.setPointerCapture(event.pointerId); document.body.classList.add('is-dragging'); setSelected(id);
-    const z = topZ(current.current);
-    change(b => ({ ...b, videos: b.videos.map(v => v.id === id ? { ...v, z } : v), stills: b.stills.map(s => s.id === id ? { ...s, z } : s) }));
+    const z = topZ(base); setMoving(ids);
+    change(() => mapCards(base, c => ids.has(c.id) ? { ...c, z: z + [...ids].indexOf(c.id) } : c));
+  }
+  function undock(id: string) {
+    if (editingLocked) return;
+    change(b => mapCards(detachModule(b, id), c => c.id === id ? { ...c, x: c.x + 22, y: c.y + 12, z: topZ(b) } : c));
+    setSelected(id);
+  }
+  function controlsFor(id: string) {
+    return { docked: groupIds(board, id).size > 1, onPeel: (event: ReactPointerEvent) => begin(event, 'move', id, true), onDetach: () => undock(id) };
   }
   function pan(event: ReactPointerEvent) {
     if (editingLocked || ![0, 1].includes(event.button)) return;
@@ -205,11 +230,22 @@ export function App() {
         const offset = current.current.videos.length % 8 * 40;
         const origin = point || { x: (90 - camera.x) / camera.scale + offset, y: (70 - camera.y) / camera.scale + offset };
         const video: VideoCard = { ...metadata, id, name: file.name, width: 440, x: origin.x + i * 35, y: origin.y + i * 35, z: topZ(current.current), time: 0, thumbnails: [], peaks: [], frameTimes: [], analysis: 'pending', showFilmstrip: true, showWaveform: true };
-        change(b => ({ ...b, videos: [...b.videos, video] })); setSelected(id); processVideo(id, file);
+        change(b => ({ ...b, videos: [...b.videos, video] })); addTrack(id, 'filmstrip'); addTrack(id, 'waveform'); setSelected(id); processVideo(id, file);
       } catch (error) { failures++; setNotice(error instanceof Error ? error.message : 'The video could not be imported.'); }
     }
     if (failures) setNotice(previous => previous || `${failures} file${failures === 1 ? '' : 's'} could not be imported. Add a playable video file.`);
     setImporting(false);
+  }
+  function addTrack(videoId: string, kind: TrackKind, duplicate?: TrackCard) {
+    change(b => {
+      const video = b.videos.find(v => v.id === videoId); if (!video) return b;
+      const group = groupIds(b, videoId);
+      const parent = boardBoxes(b).filter(c => group.has(c.id)).sort((a, c) => c.y + c.height - a.y - a.height)[0];
+      const track: TrackCard = duplicate
+        ? { ...duplicate, id: crypto.randomUUID(), x: duplicate.x + 28, y: duplicate.y + 28, dock: undefined, z: topZ(b) }
+        : { id: crypto.randomUUID(), videoId, kind, x: parent.x, y: parent.y + parent.height + DOCK_GAP, width: video.width, height: kind === 'filmstrip' ? 104 : 88, z: topZ(b), dock: { to: parent.id, side: 'bottom', offset: 0 } };
+      setSelected(track.id); return { ...b, tracks: [...b.tracks, track] };
+    });
   }
   async function makeStill(videoId: string, requested: number, existingId?: string) {
     const video = current.current.videos.find(v => v.id === videoId), blob = assets.current.get(videoId);
@@ -233,9 +269,11 @@ export function App() {
   }
   function remove(id: string) {
     const b = current.current;
-    const videos = b.videos.filter(v => v.id === id), stills = b.stills.filter(s => s.id === id || s.videoId === id);
-    setRemoved({ videos, stills });
-    change(b => ({ ...b, videos: b.videos.filter(v => v.id !== id), stills: b.stills.filter(s => s.id !== id && s.videoId !== id) })); setSelected(null);
+    const videos = b.videos.filter(v => v.id === id), stills = b.stills.filter(s => s.id === id || s.videoId === id), tracks = b.tracks.filter(t => t.id === id || t.videoId === id);
+    const ids = new Set([...videos, ...stills, ...tracks].map(c => c.id));
+    const docks = new Map(allCards(b).filter(c => !ids.has(c.id) && c.dock && ids.has(c.dock.to)).map(c => [c.id, c.dock!]));
+    setRemoved({ videos, stills, tracks, docks });
+    change(b => mapCards({ ...b, videos: b.videos.filter(v => !ids.has(v.id)), stills: b.stills.filter(s => !ids.has(s.id)), tracks: b.tracks.filter(t => !ids.has(t.id)) }, c => c.dock && ids.has(c.dock.to) ? { ...c, dock: undefined } : c)); setSelected(null);
   }
   function jump(still: StillCard) {
     players.current.get(still.videoId)?.seek(still.time); setSelected(still.videoId);
@@ -285,6 +323,9 @@ export function App() {
     finally { setOperation(false); }
   }
 
+  const selectedGroup = selected ? groupIds(board, selected) : new Set<string>();
+  const dockTarget = snap?.dock.to;
+  const moduleClass = (id: string) => `${selected === id ? 'is-selected' : ''} ${selectedGroup.size > 1 && selectedGroup.has(id) ? 'is-grouped' : ''} ${moving.has(id) ? 'is-moving' : ''} ${dockTarget === id ? `is-dock-target dock-${snap!.dock.side}` : ''}`;
   return <div className="app">
     <header className="toolbar">
       <div className="brand"><span className="brand-icon"><Film size={21} /></span><strong>Video Board</strong><span className="prototype">prototype</span></div>
@@ -317,19 +358,27 @@ export function App() {
         <svg className="board-links" aria-hidden="true">{board.stills.map(still => {
           const source = board.videos.find(v => v.id === still.videoId); if (!source) return null;
           const x1 = source.x + source.width / 2, x2 = still.x + still.width / 2;
-          return <path key={still.id} className={selected === source.id || selected === still.id ? 'is-active' : ''} d={`M ${x1} ${source.y + 18} C ${x1} ${source.y - 48}, ${x2} ${still.y - 48}, ${x2} ${still.y + 18}`} />;
+          return <path key={still.id} className={selected === source.id || selected === still.id ? 'is-active' : ''} d={`M ${x1} ${source.y + 14} C ${x1} ${source.y - 40}, ${x2} ${still.y - 40}, ${x2} ${still.y + 14}`} />;
         })}</svg>
-        {board.videos.map(video => <article key={video.id} className={`board-card video-card ${selected === video.id ? 'is-selected' : ''}`} data-video-id={video.id} style={{ left: video.x, top: video.y, width: video.width, zIndex: video.z }}
+        {snap && <div className="dock-preview" style={{ left: snap.x, top: snap.y, width: snap.width, height: snap.height }}><span>Dock {snap.dock.side === 'bottom' ? 'below' : snap.dock.side === 'top' ? 'above' : snap.dock.side}</span></div>}
+        {board.videos.map(video => <article key={video.id} className={`board-card video-card ${moduleClass(video.id)}`} data-module-id={video.id} data-video-id={video.id} data-docked-to={video.dock?.to} style={{ left: video.x, top: video.y, width: video.width, zIndex: video.z }}
           onPointerDown={() => setSelected(video.id)}>
           <VideoPlayer ref={handle => { if (handle) players.current.set(video.id, handle); else players.current.delete(video.id); }} video={video} url={urls[video.id]} urls={urls} stillTimes={board.stills.filter(s => s.videoId === video.id).map(s => s.time)} busy={busy.has(video.id) || editingLocked}
-            onPatch={patch => patchVideo(video.id, patch)} onCapture={time => void makeStill(video.id, time)} onDelete={() => remove(video.id)} onError={setNotice} onDrag={event => begin(event, 'move', video.id)} />
+            dockControls={controlsFor(video.id)} onAddTrack={kind => addTrack(video.id, kind)} onPatch={patch => patchVideo(video.id, patch)} onCapture={time => void makeStill(video.id, time)} onDelete={() => remove(video.id)} onError={setNotice} onDrag={event => begin(event, 'move', video.id)} />
           <button type="button" className="resize-handle" aria-label="Resize video card" onPointerDown={event => begin(event, 'resize', video.id)} />
         </article>)}
         {board.stills.map(still => {
           const video = board.videos.find(v => v.id === still.videoId); if (!video) return null;
-          return <article key={still.id} className={`board-card still-card ${selected === still.id ? 'is-selected' : ''}`} data-still-id={still.id} style={{ left: still.x, top: still.y, width: still.width, zIndex: still.z }} onPointerDown={() => setSelected(still.id)}>
-            <Still still={still} video={video} url={urls[still.id]} busy={busy.has(still.id) || editingLocked} onDrag={event => begin(event, 'move', still.id)} onTime={time => void makeStill(video.id, time, still.id)} onJump={() => jump(still)} onDelete={() => remove(still.id)} />
+          return <article key={still.id} className={`board-card still-card ${moduleClass(still.id)}`} data-module-id={still.id} data-still-id={still.id} data-docked-to={still.dock?.to} style={{ left: still.x, top: still.y, width: still.width, zIndex: still.z }} onPointerDown={() => setSelected(still.id)}>
+            <Still still={still} video={video} url={urls[still.id]} dockControls={controlsFor(still.id)} busy={busy.has(still.id) || editingLocked} onDrag={event => begin(event, 'move', still.id)} onTime={time => void makeStill(video.id, time, still.id)} onJump={() => jump(still)} onDelete={() => remove(still.id)} />
             <button type="button" className="resize-handle" aria-label="Resize still card" onPointerDown={event => begin(event, 'resize', still.id)} />
+          </article>;
+        })}
+        {board.tracks.map(track => {
+          const video = board.videos.find(v => v.id === track.videoId); if (!video) return null;
+          return <article key={track.id} className={`board-card track-card ${moduleClass(track.id)}`} data-module-id={track.id} data-track-kind={track.kind} data-video-id={video.id} data-docked-to={track.dock?.to} style={{ left: track.x, top: track.y, width: track.width, height: track.height, zIndex: track.z }} onPointerDown={() => setSelected(track.id)}>
+            <Track track={track} video={video} urls={urls} stillTimes={board.stills.filter(s => s.videoId === video.id).map(s => s.time)} dockControls={controlsFor(track.id)} busy={busy.has(video.id) || editingLocked} onDrag={event => begin(event, 'move', track.id)} onSeek={time => players.current.get(video.id)?.seek(time)} onCapture={time => void makeStill(video.id, time)} onDuplicate={() => addTrack(video.id, track.kind, track)} onDelete={() => remove(track.id)} onJump={() => jump({ videoId: video.id, time: players.current.get(video.id)?.time() ?? video.time } as StillCard)} />
+            <button type="button" className="resize-handle" aria-label={`Resize ${track.kind === 'filmstrip' ? 'frames' : 'audio'} scrubber`} onPointerDown={event => begin(event, 'resize', track.id)} />
           </article>;
         })}
       </div>
@@ -343,8 +392,8 @@ export function App() {
       {dragOver && <div className="drop-overlay"><Plus size={28} /><span>Drop to add videos</span></div>}
       <div className="board-tools" onPointerDown={event => event.stopPropagation()}>
         <div className="tool-group"><IconButton icon={MousePointer2} label="Select and move" aria-pressed={!hand} onClick={() => setHand(false)} /><IconButton icon={Hand} label="Pan board" aria-pressed={hand} onClick={() => setHand(!hand)} /></div>
-        {removed && <div className="tool-group"><IconButton icon={Undo2} label="Undo removal" onClick={() => { change(b => ({ ...b, videos: [...b.videos, ...removed.videos], stills: [...b.stills, ...removed.stills] })); setRemoved(null); }} /></div>}
-        <span className="board-hint">Drag background to pan <span>·</span> Pinch to zoom</span>
+        {removed && <div className="tool-group"><IconButton icon={Undo2} label="Undo removal" onClick={() => { change(b => reflow(mapCards({ ...b, videos: [...b.videos, ...removed.videos], stills: [...b.stills, ...removed.stills], tracks: [...b.tracks, ...removed.tracks] }, c => removed.docks.has(c.id) ? { ...c, dock: removed.docks.get(c.id) } : c))); setRemoved(null); }} /></div>}
+        <span className="board-hint">Header: move group <span>·</span> Grip: pull module free</span>
       </div>
       <div className="zoom-tools tool-group" onPointerDown={event => event.stopPropagation()}><IconButton icon={Minus} label="Zoom out" onClick={() => zoom(1 / 1.2)} /><button className="zoom-value" title="Reset zoom to 100%" onClick={() => zoom(1 / board.camera.scale)}>{Math.round(board.camera.scale * 100)}%</button><IconButton icon={Plus} label="Zoom in" onClick={() => zoom(1.2)} /><span className="toolbar-divider" /><IconButton icon={Scan} label="Fit board" onClick={fit} /></div>
     </div>

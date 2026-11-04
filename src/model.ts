@@ -1,6 +1,7 @@
 export type Point = { x: number; y: number };
 export type Camera = Point & { scale: number };
-export type Card = Point & { id: string; width: number; z: number };
+export type Dock = { to: string; side: 'top' | 'right' | 'bottom' | 'left'; offset: number };
+export type Card = Point & { id: string; width: number; height?: number; z: number; dock?: Dock };
 export type VideoCard = Card & {
   name: string;
   duration: number;
@@ -17,21 +18,32 @@ export type VideoCard = Card & {
   showWaveform: boolean;
 };
 export type StillCard = Card & { videoId: string; time: number; duration: number };
+export type TrackKind = 'filmstrip' | 'waveform';
+export type TrackCard = Card & { videoId: string; kind: TrackKind; height: number };
 export type Board = {
-  version: 1;
+  version: 2;
   name: string;
   videos: VideoCard[];
   stills: StillCard[];
+  tracks: TrackCard[];
   camera: Camera;
 };
 
-export const emptyBoard = (): Board => ({ version: 1, name: 'Untitled board', videos: [], stills: [], camera: { x: 0, y: 0, scale: 1 } });
+export type LegacyBoard = Omit<Board, 'version' | 'tracks'> & { version: 1 };
+export type ModuleCard = VideoCard | StillCard | TrackCard;
+export const HEADER = 28;
+export const DOCK_GAP = 5;
+export const emptyBoard = (): Board => ({ version: 2, name: 'Untitled board', videos: [], stills: [], tracks: [], camera: { x: 0, y: 0, scale: 1 } });
 export const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
-export const videoImageHeight = (video: VideoCard) => clamp(video.width * video.sourceHeight / video.sourceWidth, 150, 380);
-export const stillImageHeight = (still: StillCard, video: VideoCard) => still.width * video.sourceHeight / video.sourceWidth;
-export const videoHeight = (video: VideoCard) => 36 + videoImageHeight(video) + 46 + 26 + (video.showFilmstrip ? 46 : 0) + (video.showWaveform ? 42 : 0) + (!video.showFilmstrip && !video.showWaveform ? 10 : 0) + 16;
-export const stillHeight = (still: StillCard, video: VideoCard) => 36 + stillImageHeight(still, video) + 29;
-export const topZ = (board: Board) => Math.max(0, ...board.videos.map(v => v.z), ...board.stills.map(s => s.z)) + 1;
+export const videoImageHeight = (video: VideoCard) => video.height ? video.height - HEADER - 54 : clamp((video.width - 2) * video.sourceHeight / video.sourceWidth, 130, 360);
+export const stillImageHeight = (still: StillCard, video: VideoCard) => still.height ? still.height - HEADER - 24 : (still.width - 2) * video.sourceHeight / video.sourceWidth;
+export const videoHeight = (video: VideoCard) => HEADER + videoImageHeight(video) + 54;
+export const stillHeight = (still: StillCard, video: VideoCard) => HEADER + stillImageHeight(still, video) + 24;
+export const allCards = (board: Board): ModuleCard[] => [...board.videos, ...board.stills, ...board.tracks];
+export const topZ = (board: Board) => Math.max(0, ...allCards(board).map(v => v.z)) + 1;
+export function mapCards(board: Board, update: (card: ModuleCard) => ModuleCard): Board {
+  return { ...board, videos: board.videos.map(v => update(v) as VideoCard), stills: board.stills.map(s => update(s) as StillCard), tracks: board.tracks.map(t => update(t) as TrackCard) };
+}
 
 export function timecode(time: number, millis = true) {
   const ms = Math.max(0, Math.round(time * 1000));
@@ -53,5 +65,21 @@ export function boardBoxes(board: Board) {
       const video = board.videos.find(v => v.id === s.videoId);
       return video ? [{ ...s, height: stillHeight(s, video) }] : [];
     }),
+    ...board.tracks.map(track => ({ ...track })),
   ];
+}
+
+/** v1 media IDs and still positions survive; embedded tracks become docked modules. */
+export function migrateBoard(saved: Board | LegacyBoard): Board {
+  if (saved.version === 2) return saved;
+  const board: Board = { ...saved, version: 2, tracks: [] };
+  for (const video of board.videos) {
+    let parent: Card = video, bottom = video.y + videoHeight(video);
+    for (const kind of ['filmstrip', 'waveform'] as const) {
+      if (!(kind === 'filmstrip' ? video.showFilmstrip : video.showWaveform)) continue;
+      const track: TrackCard = { id: `${video.id}-${kind}`, videoId: video.id, kind, x: video.x, y: bottom + DOCK_GAP, width: video.width, height: kind === 'filmstrip' ? 104 : 88, z: video.z, dock: { to: parent.id, side: 'bottom', offset: 0 } };
+      board.tracks.push(track); parent = track; bottom = track.y + track.height;
+    }
+  }
+  return board;
 }

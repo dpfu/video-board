@@ -14,8 +14,65 @@ npm run dev
 Open <http://127.0.0.1:5193/>. Keep this address and browser profile stable:
 browser storage belongs to that origin. `npm run build` checks TypeScript and
 builds the app; `npm run preview` serves that build at the same address.
+Reuse an already running preview. Cora's retained local dev server records its
+PID and output in ignored `tmp/dev-server.pid` and `tmp/dev-server.log`.
 
-## First prototype · 4 November 2026
+## Current: modular graphite interface · 4 November 2026
+
+Daniel requested compact, tactile grey modules that magnetically dock and can
+still be resized independently. The interface now uses shallow bevels, 28px
+headers and small controls. This replaces the initial green workspace design.
+
+- The **player**, **Frames** scrubber, **Audio** scrubber and each linked still are
+  separate modules. Newly imported videos start with both scrubbers docked below.
+- Drag an ordinary header to move its whole docked group. Pull the small dotted
+  **grip** to detach and move just that module. **Undock module** releases a module
+  with one click; its former neighbours remain in place. Alt-dragging a header
+  also releases just that module. Hold Shift while dragging to suppress magnets.
+- Bring a module or group near another module's top, bottom, left or right edge.
+  A preview marks the destination; release to dock. Snap distance is measured in
+  screen pixels so it feels consistent at different board zoom levels. Docking
+  avoids overlapping other modules.
+- Resize any module using its corner. Attached neighbours follow the resized
+  edge, retaining their own widths and heights. A wide detached scrubber still
+  represents the same full video duration and controls the original player.
+- The player toolbar adds more Frames/Audio modules. A scrubber's duplicate
+  button creates another independent view of that source. All views share one
+  playhead; spatial docking is separate from which video a module controls.
+- PNG export includes every module at its actual board position and size.
+  ZIP backups retain module geometry and dock connections. Schema **v2** imports
+  old v1 ZIPs and automatically turns their embedded tracks into docked modules.
+  Existing video/still asset IDs and still timestamps are preserved.
+
+Automatic cut detection and a cut-marker module remain future experiments.
+Timeline resizing currently changes the visual precision over the full duration;
+it does not introduce a separately zoomed time interval.
+
+Interactive verification covered v1 browser-state migration, moving a group from
+the player and a scrubber header, pulling out and releasing the Audio module,
+resizing it from 440px to about 796px, mouse scrubbing at its new size, redocking
+it below Frames, resizing Frames with Audio following, docking a still to a
+player, duplicated synchronized Audio views, playback, PNG export, ZIP reopening
+and reload. Restored widths, heights and dock targets matched the saved v2 ZIP;
+its original video matched the source bytes. The final browser console had no
+errors. The production/TypeScript build passed; no test suite was added.
+
+### Pre-migration recovery
+
+Host **bugglzwerg**, source: the v1 board saved at `http://127.0.0.1:5193/` before
+the modular update. Verified byte-identical export and ZIP integrity on
+4 November 2026, containing one video and two linked stills:
+
+`~/.local/share/cora-backups/video-board/2026-11-04-before-modular-ui.videoboard.zip`
+
+Open this file using **Open project backup** to recover its content (the current
+app converts its layout to modules). For the original application and embedded
+layout, use a separate checkout of commit `e2c091b`, start it on the same local
+address after stopping the current server, and open that ZIP. Do not overwrite a
+working checkout or clear browser storage to perform recovery. This pinned
+host-local copy is not an off-device backup.
+
+## Historical first prototype · 4 November 2026
 
 - Drop local video files anywhere on the board, or use **Add video**.
 - Each video has its own playback, sound, speed and whole-video loop controls.

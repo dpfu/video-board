@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { ArrowUpLeft, ChevronLeft, ChevronRight, Link2, Trash2 } from 'lucide-react';
 import { IconButton } from './Icons';
-import { clamp, parseTimecode, timecode, type StillCard, type VideoCard } from './model';
+import { clamp, parseTimecode, stillImageHeight, timecode, type StillCard, type VideoCard } from './model';
+import { ModuleGrip, UndockButton, type DockControls } from './ModuleGrip';
 
-export function Still({ still, video, url, busy, onDrag, onTime, onJump, onDelete }: {
+export function Still({ still, video, url, busy, onDrag, onTime, onJump, onDelete, dockControls }: {
   still: StillCard; video: VideoCard; url: string; busy: boolean; onDrag: (event: React.PointerEvent) => void;
   onTime: (time: number) => void; onJump: () => void; onDelete: () => void;
+  dockControls: DockControls;
 }) {
   const [draft, setDraft] = useState(timecode(still.time));
   const [invalid, setInvalid] = useState(false);
@@ -21,6 +23,7 @@ export function Still({ still, video, url, busy, onDrag, onTime, onJump, onDelet
   }
   return <>
     <header className="card-header still-header" onPointerDown={onDrag}>
+      <ModuleGrip onPeel={dockControls.onPeel} />
       <Link2 size={14} className="card-kind" />
       <input className="still-time" aria-label={`Still timecode from ${video.name}`} aria-invalid={invalid} title="Edit timecode · mm:ss.mmm" value={draft} disabled={busy} spellCheck={false}
         onChange={event => { setDraft(event.target.value); setInvalid(false); }} onBlur={submit}
@@ -32,9 +35,10 @@ export function Still({ still, video, url, busy, onDrag, onTime, onJump, onDelet
       <IconButton icon={ChevronLeft} label={frameTimes.length ? 'Previous frame' : 'Earlier by 0.1 seconds'} disabled={busy || (frameTimes.length > 0 && previous === undefined)} onClick={() => onTime(previous ?? clamp(still.time - .1, 0, video.duration))} />
       <IconButton icon={ChevronRight} label={frameTimes.length ? 'Next frame' : 'Later by 0.1 seconds'} disabled={busy || (frameTimes.length > 0 && next === undefined)} onClick={() => onTime(next ?? clamp(still.time + .1, 0, video.duration - .001))} />
       <IconButton icon={ArrowUpLeft} label="Jump to video" onClick={onJump} />
+      <UndockButton {...dockControls} />
       <IconButton icon={Trash2} label="Remove still" onClick={onDelete} />
     </header>
-    <img className={`still-image ${busy ? 'is-busy' : ''}`} src={url} alt={`Still from ${video.name} at ${timecode(still.time)}`} draggable={false} onPointerDown={onDrag} onDoubleClick={onJump} />
+    <img className={`still-image ${busy ? 'is-busy' : ''}`} src={url} style={{ height: stillImageHeight(still, video) }} alt={`Still from ${video.name} at ${timecode(still.time)}`} draggable={false} onPointerDown={onDrag} onDoubleClick={onJump} />
     <footer className="still-footer"><Link2 size={10} /><span title={video.name}>{video.name}</span>{busy && <span>Updating…</span>}</footer>
   </>;
 }

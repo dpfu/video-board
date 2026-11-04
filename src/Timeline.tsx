@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import type { CSSProperties, PointerEvent, KeyboardEvent } from 'react';
-import { clamp, timecode, type VideoCard } from './model';
+import { clamp, timecode, type TrackKind, type VideoCard } from './model';
 
 export function Waveform({ peaks }: { peaks: number[] }) {
   const maximum = Math.max(.001, ...peaks);
@@ -9,8 +9,8 @@ export function Waveform({ peaks }: { peaks: number[] }) {
   return <svg className="waveform" viewBox="0 0 1000 40" preserveAspectRatio="none" aria-hidden="true"><path d={`M${[...top, ...bottom].join('L')}Z`} fill="currentColor" /></svg>;
 }
 
-export function Timeline({ video, time, urls, stillTimes, onSeek }: {
-  video: VideoCard; time: number; urls: Record<string, string>; stillTimes: number[]; onSeek: (time: number) => void;
+export function Timeline({ video, time, urls, stillTimes, mode, onSeek }: {
+  video: VideoCard; time: number; urls: Record<string, string>; stillTimes: number[]; mode: TrackKind | 'position'; onSeek: (time: number) => void;
 }) {
   const active = useRef<number | null>(null);
   const position = clamp(time / video.duration * 100, 0, 100);
@@ -26,9 +26,9 @@ export function Timeline({ video, time, urls, stillTimes, onSeek }: {
     if (event.key === 'End') next = video.duration;
     if (next !== undefined) { event.preventDefault(); onSeek(clamp(next, 0, video.duration)); }
   };
-  return <div className="timeline" style={{ '--playhead': `${position}%` } as CSSProperties}>
-    <div className="timeline__ruler" aria-hidden="true">{[0, .25, .5, .75, 1].map(t => <span key={t}>{timecode(video.duration * t, false)}</span>)}</div>
-    <div className="timeline__tracks" role="slider" tabIndex={0} aria-label={`Scrub ${video.name}`} aria-valuemin={0} aria-valuemax={video.duration} aria-valuenow={time} aria-valuetext={timecode(time)}
+  return <div className={`timeline timeline--${mode}`} style={{ '--playhead': `${position}%` } as CSSProperties}>
+    {mode !== 'position' && <div className="timeline__ruler" aria-hidden="true">{[0, .25, .5, .75, 1].map(t => <span key={t}>{timecode(video.duration * t, false)}</span>)}</div>}
+    <div className="timeline__tracks" role="slider" tabIndex={0} aria-label={`Scrub ${mode === 'position' ? '' : mode === 'filmstrip' ? 'frames · ' : 'audio · '}${video.name}`} aria-valuemin={0} aria-valuemax={video.duration} aria-valuenow={time} aria-valuetext={timecode(time)}
       onKeyDown={keyboard}
       onPointerDown={event => {
         if (event.button !== 0) return;
@@ -38,9 +38,9 @@ export function Timeline({ video, time, urls, stillTimes, onSeek }: {
       onPointerMove={event => { if (active.current === event.pointerId) seekPointer(event); }}
       onPointerUp={event => { if (active.current === event.pointerId) { seekPointer(event); active.current = null; } }}
       onPointerCancel={() => { active.current = null; }}>
-      {video.showFilmstrip && <div className="timeline__filmstrip">{video.thumbnails.length ? video.thumbnails.map(key => <img key={key} src={urls[key]} alt="" draggable={false} />) : <span className="track-message">{video.analysis === 'pending' ? 'Making thumbnails…' : 'Thumbnails unavailable'}</span>}</div>}
-      {video.showWaveform && <div className="timeline__audio">{video.peaks.length ? <Waveform peaks={video.peaks} /> : <span className="track-message">{video.analysis === 'pending' ? 'Reading audio…' : video.analysisNote || 'Waveform unavailable'}</span>}</div>}
-      {!video.showFilmstrip && !video.showWaveform && <div className="timeline__plain" />}
+      {mode === 'filmstrip' && <div className="timeline__filmstrip">{video.thumbnails.length ? video.thumbnails.map(key => <img key={key} src={urls[key]} alt="" draggable={false} />) : <span className="track-message">{video.analysis === 'pending' ? 'Making thumbnails…' : 'Thumbnails unavailable'}</span>}</div>}
+      {mode === 'waveform' && <div className="timeline__audio">{video.peaks.length ? <Waveform peaks={video.peaks} /> : <span className="track-message">{video.analysis === 'pending' ? 'Reading audio…' : video.analysisNote || 'Waveform unavailable'}</span>}</div>}
+      {mode === 'position' && <div className="timeline__plain" />}
       {stillTimes.map((t, i) => <span key={i} className="timeline__marker" style={{ left: `${t / video.duration * 100}%` }} />)}
       <span className="timeline__playhead" />
     </div>

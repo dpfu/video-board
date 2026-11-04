@@ -67,6 +67,8 @@ Browser workflows use the actual decoder, workers and IndexedDB. The unit storag
 checks use `fake-indexeddb`. Disposable reports, downloads and failure traces go
 under ignored `tmp/playwright/`; open the HTML report with
 `npx playwright show-report tmp/playwright/report`.
+The development watcher excludes `tmp/`: generating HTML reports/traces there
+must not reload an active demo or discard its transient selection/draft.
 
 Verified on **bugglzwerg, 5 November 2026** after the coding iteration:
 `npm run check` passed all **45 checks** and the production build; the browser

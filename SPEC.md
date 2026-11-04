@@ -1,7 +1,7 @@
 # Video Board — working specification
 
 Updated **5 November 2026**, preserving Daniel's 4 November decisions and the
-5 November exploratory pass. This is the single
+5 November exploratory and comparative passes. This is the single
 home for product decisions, proposed behavior and open questions. Update it as
 the discussion develops; preserve corrections and their rationale. The
 [README](README.md) is the minimal public entrypoint; the
@@ -112,6 +112,72 @@ is intact. Fixed quarter-position timeline ticks truncate fractional seconds
 tick intervals or suitable precision. Review tiny labels/handles at board zoom
 without expanding padding throughout the interface. This pass covers short
 generated clips in Chromium, not a general browser/codec/long-video matrix.
+
+## Comparative walkthrough · 5 November 2026
+
+Reviewed the same live **v0.0.1 / b923ee7** in a second isolated Chromium
+workflow: compare evidence across two sources, create overlapping regions,
+reuse/rename a code, retrieve its occurrences and revise the selected evidence.
+The references were ATLAS.ti 26 Mac's documented [multimedia quotations](https://manuals.atlasti.com/Mac/en/manual/Multimedia/MultimediaWorkingWith.html)
+and [image quotations](https://manuals.atlasti.com/Mac/en/manual/Quotations/QuotationsImageCreating.html),
+plus an operated [tldraw example](https://tldraw.dev/examples/basic). ATLAS.ti
+itself was not run. This comparison concerns interaction and scope clarity,
+not feature parity or a substantive analysis of research material.
+
+Built a deliberate comparison strip with **2 sources, 2 stills, 3 image
+regions, 1 free time range, 8 quotations and 1 shared code**. Docking, group
+movement and resizing preserved evidence coordinates and assignments. Overlapping
+regions remained independent. Renaming the shared code updated both sources'
+region labels without changing quotation identities or assignments. Duplicating
+a still view correctly retained one analytical occurrence and shared retiming;
+removing that view preserved the quotation. A fresh-session ZIP restore matched
+the saved board exactly, including hidden source players and docking. CSV had
+all 8 quotation rows; each original video appeared once in the ZIP and matched
+its input bytes. No runtime/console errors were observed in the main session.
+Disposable evidence is in `tmp/comparison-pass-2026-11-05/`, including
+`observations.json`, board/CSV/ZIP and comparison/reference screenshots.
+
+**New reproduced findings; proposed priorities, not implemented fixes:**
+
+1. **Transport actions replace the active coding target.** Select a coded
+   image region, then click its still's **Next frame**: the inspector switches
+   from Image region to Still frame. The region's geometry/codes/memo survive,
+   but another code would now apply to the whole frame. Similarly, select a
+   saved time quotation, reveal its source, then press the source's **Play**:
+   the target changes to Whole video. Card-level `onPointerDown` calls
+   `selectModule` in `src/App.tsx`, conflating board selection with evidence
+   selection. Preserve the relevant active quotation during transport/retiming
+   and make deliberate scope switches explicit.
+2. **A draft segment leaves the previous quotation's coding controls active.**
+   From a source, choose **Select video segment**, enter boundaries and assign
+   a code before **Save free quotation**. The code is assigned to the whole
+   video; the saved range has no code. Either let draft coding save/assign to
+   that draft or disable the previous target's assignment controls while it is
+   pending. The visible editing scope must agree with the actual assignment.
+3. **Following a code found through its definition can hide all its matches.**
+   Search `kinetic`, present only in the shared code's definition: Codes shows
+   that code with 2 occurrences. Click it: Quotations retains the search and
+   displays 0 results. Clearing the query reveals both. `src/Coding.tsx`
+   searches definitions in Codes but excludes them from quotation matching.
+   Clear the originating code query on retrieval or make search semantics
+   consistent, with visible query/filter state.
+
+**Design implications, preserving the agreed model:** the tldraw example makes
+duplicate shapes independent and provides Zoom to selection. Video Board's
+duplicate views intentionally share a quotation instead; show that relationship
+clearly and distinguish **another view** from **a new independent capture**.
+A compact active-scope indicator and focus-on-selection action would help
+comparison and retrieval. ATLAS.ti's documented range/image quotation workflow
+is a useful reference for keeping the selected evidence visible while editing
+its boundaries. These are small interaction proposals, not a request for code
+hierarchies, segmentation models or a new workspace architecture.
+
+Minor boundary-editing friction: with a draft initially at 0–1 seconds,
+entering an in-point of 1 before extending the out-point clamps to the preceding
+frame to preserve a positive duration; extending the out-point does not revisit
+that clamp. Re-entering the in-point gives the requested boundary. Make this
+constraint visible or improve the marking flow; the observed source reveal
+correctly sought the stored boundary.
 
 ## Interface and interaction
 

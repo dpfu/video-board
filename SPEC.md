@@ -36,13 +36,13 @@ Keep it compact, responsive and methodologically useful: **select → code → m
 | --- | --- |
 | Local video import, source players, linked stills, frame adjustment | Implemented; see README and `src/VideoPlayer.tsx`, `src/Still.tsx`. |
 | Compact grey modules, docking/undocking, group movement, independent resizing | Implemented. |
-| Microanimations and tactile interaction feedback, with tldraw as reference | Agreed direction; motion details proposed below, not yet implemented as a coherent pass. |
+| Microanimations and tactile interaction feedback, with tldraw as reference | Implemented: pickup/drop, edge previews, settling, linked creation/reveal cues, controls/chips/popovers and reduced motion. |
 | Synchronized Frames/Audio scrubbers, waveform and thumbnail analysis | Implemented. |
 | TypeScript port of FFmpeg scdet, cached threshold, dockable Cuts module | Implemented and compared with native references; see README and `src/scdet.ts`. |
 | PNG board export, local persistence, atomic ZIP backup/restore | Implemented. |
-| Linked clip cards with muted hover preview and editable ranges | Agreed direction; not implemented. |
-| Free quotations, whole-video/clip/subsegment coding, region coding, memos and retrieval | Agreed conceptual model; not implemented. |
-| Still-region selection | Planned: manual, movable/resizable rectangles for the first version, chosen by Daniel. |
+| Linked clip cards with muted hover preview and editable ranges | Implemented: shot default, independent scrub/playback, shared source data, duplicate views and explicit all-shots action. |
+| Free quotations, whole-video/clip/subsegment coding, region coding, memos and retrieval | Implemented: flat codes, compact assignment popovers, dockable Codes/Quotations/Sources module, ZIP restore and CSV export. |
+| Still-region selection | Implemented: manual, movable/resizable rectangles; retiming preserves geometry, identity, codes and memo across views. |
 | Browser segmentation for proposing still regions | Deferred by Daniel for the first version; research retained below. |
 
 ## Interface and interaction
@@ -73,7 +73,7 @@ objects feel tangible while preserving the compact grey interface. Reference:
 [snapping feedback](https://tldraw.dev/sdk-features/snapping) and
 [animation and reduced motion](https://tldraw.dev/sdk-features/animation).
 
-Proposed first pass, to tune together in the browser:
+First implementation, to tune together in the browser:
 
 - **Pick up / put down:** a small shadow and outline change acknowledge grabbing
   a module or assembly; release settles it back into the board.
@@ -91,9 +91,11 @@ Proposed first pass, to tune together in the browser:
 - **Code and retrieve:** a code chip's arrival acknowledges assignment; revealing
   a quotation briefly highlights the relevant card/region and source context.
 
-Initial timing proposal: roughly **100–150 ms** for control feedback and
-**150–220 ms** for settling/appearance, with restrained ease-out. Dragging and
-resizing stay attached to the pointer; decorative motion is interruptible by
+Initial timing proposal was **100–150 ms** for control feedback and
+**150–220 ms** for settling/appearance. The implementation uses **120 ms** control
+feedback, **180 ms** settling, **200 ms** creation and **420 ms** source highlights,
+with restrained ease-out. Dragging and resizing stay attached to the pointer;
+decorative motion is interruptible by
 the next gesture. Respect `prefers-reduced-motion` with immediate placement and
 clear static feedback. Keep animation state transient, separate from saved
 geometry and exports, and keep playback/board gestures responsive during motion.
@@ -111,9 +113,14 @@ A quotation identifies material worth working with; coding is optional.
 | View | A player, still or region display of a source/quotation, with board geometry and presentation/playback state. |
 
 This is a small domain model, not a request for a new database framework. The
-current model uses a video card ID as its media reference and has no quotation
-layer. Introducing quotations must separate their identity from their board
-views without losing existing media IDs, still times, geometry or backups.
+original model used a video card ID as its media reference and had no quotation
+layer. Schema **v3** adds stable quotations, codes and separate clip/still views.
+For backward compatibility, the `videos` catalog retains each original media ID
+and its primary player's layout fields. Hiding that player retains the source,
+quotations and linked views; retrieval can reveal it again. Clip/still view IDs
+and quotation IDs are independent. v1/v2 migration preserves original media IDs,
+still times and layout. A frame's multiple views share its cached image asset;
+retiming replaces that reference together, retaining older images for session Undo.
 
 ### Coding scopes
 
@@ -138,7 +145,7 @@ to that whole clip quotation. Subsegment quotations retain their own source
 boundaries; trimming a parent must not silently clamp or delete them. If a
 subsegment lies outside the current parent view, its source remains reachable.
 
-Proposed minimal rule: code assignments are explicit. Coding a whole clip does
+Implemented minimal rule: code assignments are explicit. Coding a whole clip does
 not generate duplicate assignments on every subsegment or image region inside
 it. A code's retrieval view still reveals the full extent of that coded clip.
 
@@ -166,7 +173,7 @@ revision-history or multi-coder audit system has not been requested.
 
 ### Minimal coding and retrieval interface
 
-Proposed first implementation:
+First implementation:
 
 - A dockable **Codes** module with search and create/rename actions. Names remain
   visible alongside colour; code IDs remain stable through renaming.
@@ -178,8 +185,8 @@ Proposed first implementation:
 - Select a code to retrieve its quotations across sources. Results reveal/play
   their source with context and can be compared on the board. Filtering must not
   rewrite saved layout or duplicate evidence records.
-- Extend project ZIP metadata to include quotations, codes and notes. Add a plain
-  CSV export containing stable quotation/source references, times or frame/region
+- Project ZIP metadata includes quotations, codes and notes. A plain CSV export
+  contains stable quotation/source references, times or frame/region
   coordinates, code assignments and memos. PNG remains a presentation export.
 
 ## Linked clips and player behavior
@@ -203,13 +210,21 @@ Its semantic source link survives detaching, resizing and moving on the board.
 - Manual quotations may span multiple shots. Detection produces useful
   proposals, not obligatory analytical units or automatic research codes.
 
-Performance proposals to validate in the prototype: reuse one hover-preview
-player across inactive clip cards; show cached posters elsewhere; load on demand;
-use a brief hover-intent delay to avoid activation while crossing the board.
-Suspend hover during board gestures, cancel obsolete requests and avoid layout
-shifts/blank flashes. Do not save the transient hover playhead as an edit to the
-source or quotation. The exact delay, explicit/pinned playback controls and
-sound-on behavior remain open.
+Performance proposals called for one shared preview budget, cached posters and
+hover intent. The first implementation allows **one active clip video element**
+at a time, across hover and explicit playback. Inactive cards display a cached
+cover. Hover intent is **120 ms** and pauses during board gestures. Explicit Play
+or scrubbing pins that clip; Stop clip preview or Escape releases it. Sound can
+be enabled explicitly on pinned playback; a later hover starts muted. Hover
+playheads do not edit source/quotation timestamps.
+
+Visible clip covers use a single cancellable capture queue, with **320px** source
+frames and at most **48** shared cached images. Captures wait for a **100 ms** quiet
+period during range edits; obsolete requests are terminated. Covers are transient
+and regenerate after reopening, with no extra video assets or per-card decoder.
+An existing thumbnail is a temporary fallback while the precise cover loads.
+These are prototype defaults to review on Daniel's actual examples, rather than
+measured guarantees for every browser or large project.
 
 Native playback can have a seek pause at a loop boundary. Source-linked timing
 and cached metadata do not guarantee seamless, frame-exact browser loop rendering.
@@ -279,7 +294,9 @@ automatic proposals can be evaluated only if useful. Manual rectangles remain
 the baseline. Larger SAM-family models are possible alternatives, not current
 dependencies or promised quality upgrades.
 
-## Proposed implementation sequence and review checks
+## Implementation sequence and review checks
+
+The agreed three slices are implemented:
 
 1. Introduce stable source/quotation/view references and linked range players.
    Create, trim, hover-preview and reopen a clip without new video assets;
@@ -287,12 +304,19 @@ dependencies or promised quality upgrades.
 2. Add manual rectangular region quotations plus a small shared coding/memo/
    retrieval layer. Exercise whole video, whole clip and nested segment coding; retime a still
    without moving its region or losing codes. Retrieve across both media forms.
-3. Extend ZIP and CSV roundtrips for the actual analysis data, including duplicate
-   views, overlapping ranges and code renaming. Keep context links usable.
+3. Extend ZIP roundtrips and CSV exports for the actual analysis data, including
+   duplicate views, overlapping ranges and code renaming. ZIP is the editable
+   recovery format; CSV is a tabular analysis export.
 
 Include microanimation feedback in each interaction slice. Review rapid repeated
 drag/dock/undock gestures, precise scrubbing and region edits, keyboard/touch
 access, and reduced motion; interrupting an animation must leave correct geometry.
+
+Session Undo retains up to **30** edits, including frame asset references, region
+geometry and quotation/code changes. It does not persist an audit history.
+Removing a view preserves its quotation; deleting a quotation is a separate
+explicit action. Deleting a frame quotation also deletes its image regions;
+temporal children retain absolute ranges if their parent quotation is deleted.
 
 Segmentation is deferred from this sequence. If revisited as a separate small
 experiment, check local inference, bounded memory, cancellation on retiming,
@@ -334,3 +358,7 @@ loop is useful.
 - Daniel requested polished microanimations with tldraw as the interaction
   reference. Motion should communicate manipulation and relationships; concrete
   timings and effects remain proposals to tune in the prototype.
+- Daniel then requested implementation of the complete agreed spec in goal mode.
+  The three slices and motion pass are implemented; segmentation and the other
+  explicitly deferred features remain outside this prototype. Current checks,
+  controls, storage migration and practical limits are recorded in the README.

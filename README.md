@@ -2,7 +2,9 @@
 
 A small, local-first experiment for exploring short videos on a spatial board.
 The first iteration focuses on mouse scrubbing and **linked stills**: independent
-images whose source video and frame timestamp remain editable.
+images whose source video and frame timestamp remain editable. The current
+prototype also supports source-linked clip views, free quotations, manual image
+regions, codes, memos and retrieval.
 
 Product decisions and the evolving plan live in [SPEC.md](SPEC.md), including
 linked clips, free quotations, coding, editable-frame rectangular regions and
@@ -37,15 +39,20 @@ For a shorter iteration, use `npm test` or `npm run test:watch`; `npm run test:e
 builds and runs just the browser workflows. Browser tests start a separate server
 on **4193** and use fresh contexts, leaving the working board on **5193** alone.
 
-- **23 Vitest checks:** group movement, detaching, independent resizing, docking
+- **27 Vitest checks:** group movement, detaching, independent resizing, docking
   on four sides and at different zoom levels, legacy v1 migration, persistence
   and atomic rollback after a simulated storage failure; native FFmpeg score
   parity on 8/10-bit sequences, reusable buffers, geometry changes, 16-bit
-  normalization, exact shot boundaries and browser luma preprocessing.
-- **5 Chromium workflows:** real-media import and analysis; synchronized resized
+  normalization, exact shot boundaries and browser luma preprocessing; retiming
+  coded regions, parent trimming, shared media/quotations, CSV and v2 migration.
+- **9 Chromium workflows:** real-media import and analysis; synchronized resized
   scrubbers and exact linked-still recapture; magnetic group interactions, Undo
   and reload; ZIP roundtrip, rejected incomplete backups and offscreen PNG export;
-  known-cut detection, cached threshold adjustment, shot seeking and older boards.
+  known-cut detection, cached threshold adjustment, shot seeking and older boards;
+  muted independent clip loops, precise range edits and explicit all-shot clips;
+  compact coding popovers, source/clip/subsegment/frame/region coding, retrieval,
+  code renaming, CSV and v3 ZIP validation/reopen; retiming, moving/resizing and
+  duplicating coded regions; interrupting settling motion and reduced motion.
 
 The versioned [synthetic fixture](e2e/fixtures/README.md) contains no private media.
 Browser workflows use the actual decoder, workers and IndexedDB. The unit storage
@@ -53,13 +60,100 @@ checks use `fake-indexeddb`. Disposable reports, downloads and failure traces go
 under ignored `tmp/playwright/`; open the HTML report with
 `npx playwright show-report tmp/playwright/report`.
 
-Verified on **bugglzwerg, 4 November 2026** after adding shot detection:
-`npm run check` passed all **28 checks** and the production build. The browser
-portion took about 15 seconds. Visual inspection covered the resized Cuts module
-and its PNG export. The initial pre-detector suite had passed 18 checks in about
-11 seconds after correcting a runner viewport mismatch.
+Verified on **bugglzwerg, 4 November 2026** after implementing the agreed analysis
+spec and motion pass: `npm run check` passed all **36 checks** and the production
+build. The browser portion took about **34 seconds**. Visual inspection covered
+the clip/coding board, retimed rectangular regions and their PNG exports.
+The earlier shot-detector suite passed 28 checks in about 15 seconds; its visual
+inspection covered the resized Cuts module and PNG export. The initial
+pre-detector suite passed 18 checks in about 11 seconds after correcting a runner
+viewport mismatch.
 Automated coverage currently targets Chromium with VP9/Opus, not a codec/browser
 compatibility matrix.
+
+## Linked analysis and motion · 4 November 2026
+
+This implements the three prototype slices in [SPEC.md](SPEC.md). Browser model
+segmentation and the other explicitly deferred features remain future work.
+
+- **Create clip at playhead** in the source header creates a player view of the
+  detected shot. While detection is absent, it falls back to up to three seconds.
+  **Create clips from all shots** is an explicit batch action; automatic analysis
+  itself adds no cards. Clip creation/trim never encodes or copies video files.
+- Hover a clip's image for a **muted loop**; leaving returns to its cover. Its
+  playhead is independent of the source player's. Explicit **Play clip**, or its
+  small scrub bar, pins playback so it remains available when leaving the image.
+  Pause, playback speed and explicit unmute are available. **Stop clip preview**
+  or Escape releases it. One clip playback element is active at a time.
+- Clip **in/out timecodes and handles** edit its source range. Final endpoints
+  use known source frame timestamps; browser playback/scrubbing itself remains
+  time-based. A source-link button reveals the original at the clip's current
+  time. Clip cards move, dock, undock and resize like the other modules.
+- **Duplicate clip view** and **Duplicate still view** create another display of
+  the same quotation, sharing codes/memo and image assets. They do not create a
+  second coded occurrence. New selections can overlap freely, even at identical
+  coordinates. Frames/Audio/Cuts modules remain views of the original timeline;
+  each clip also has its own compact scrub control.
+- **Code whole video**, **Code clip**, and **Code still** open a compact assignment
+  popover with search/create, multiple code toggles and a memo. The toolbar's
+  **Open codes and quotations** opens a movable/resizable/dockable module for
+  codes, quotation inspection, retrieval and the source catalog. Names stay
+  visible with colours; definitions and renamed codes keep stable IDs.
+- **Select video segment** or **Select segment in clip** opens an in/out editor.
+  **Save free quotation** retains the selection without requiring a code or card.
+  Assign codes/memos there; **Place clip view** displays that quotation on the
+  board. Quotations can also be edited directly in the inspector. All timestamps
+  are absolute in the original source. Trimming a whole clip changes that clip's
+  coded extent while its subsegments retain their own boundaries and source
+  context, even when they fall outside the newly trimmed parent.
+- **Draw region** on a still enters rectangle mode; Escape exits. Drag a region
+  to move it, or its corner handles to resize it. Enter selects a focused region;
+  arrows move it, Alt+arrows resize it and Shift makes larger steps. Regions are
+  free quotations and can overlap. Image coordinates exclude letterboxing.
+  Retiming a still updates all its regions and duplicate views while preserving
+  geometry, quotation IDs, codes and memos. There is no automatic object tracking.
+- Code retrieval lists each quotation once across all sources. Revealing a result
+  selects its frame/region or seeks its source; placing a clip view is explicit.
+  Search/filtering does not rearrange the board or duplicate evidence.
+- Removing a clip/still **view** keeps its quotation. **Hide source player** keeps
+  the original and linked data; Sources/retrieval can reveal it again. **Delete
+  quotation** is separate: deleting a frame also deletes its regions; temporal
+  children of a deleted range keep their source boundaries. Session **Undo**
+  retains 30 edits, including frame retiming and the prior cached image. It is
+  not a durable revision history.
+
+Motion uses 120ms control transitions, 180ms settling, 200ms card appearance and
+brief source highlights. Magnetic previews mark the candidate edge before
+release; dragging/resizing/scrubbing remain attached to input. Grabbing a module
+during settling preserves its visible position. `prefers-reduced-motion` removes
+the movement and transitions while retaining selection/focus feedback. Motion
+state is transient and never changes exported or stored geometry.
+
+Inactive clips use covers captured from the actual starting frame. A single
+cancellable worker queue captures visible **320px** covers after a 100ms quiet
+period; up to **48** shared images are cached. Hover intent is 120ms. Inactive
+clip cards have no video decoder, and obsolete cover requests are terminated on
+retiming. Covers regenerate after reload and are not added to project backups.
+These bounds keep the prototype modest; representative large-project and
+cross-browser performance benchmarks remain to be done. Native browser looping
+can have a short seek seam at its boundary.
+
+Schema **v3** saves quotations, codes, memos, clip views and the Codes module.
+v1/v2 projects migrate without replacing media IDs or still positions/times.
+For compatibility, the `videos` catalog retains the stable original asset ID and
+primary player geometry; quotation IDs and additional view IDs are independent.
+Still retiming creates a new image asset reference shared by its views, keeping
+the prior image available for session Undo. ZIP files include only currently
+referenced assets, with each original/image asset stored once, and validate all
+quotation/source/code/parent/geometry references before atomic replacement.
+
+**Export quotations as CSV** writes uncoded and coded evidence with stable source
+and quotation IDs, absolute seconds, normalized image fractions, titles, codes,
+definitions, memos and created/updated timestamps. There is one row per code
+assignment, or one blank-code row for uncoded material. ZIP is the editable
+restore format. PNG includes source-linked clips, regions/code labels and a
+codes legend at the saved board geometry; inactive clip frames are captured on
+demand during export. PNG remains a presentation image.
 
 ## Current: local shot detection · 4 November 2026
 
@@ -94,10 +188,10 @@ results need not equal FFmpeg run directly on the original YUV pixels.
 These are visual **shot** proposals, not semantic scene labels. Gradual transitions,
 similar-looking cuts, flashes and rapid edits can be missed or misclassified.
 There is no extra adaptive filter or minimum-shot suppression layered onto this
-port. `shotRanges`/`shotAt` expose source-linked, end-exclusive ranges for the next
-clip-card iteration; hover-playing clip cards and editable manual boundaries are
-not implemented yet. Full scanning adds decode work, while playback and frame
-captures remain independent of its worker.
+port. `shotRanges`/`shotAt` expose source-linked, end-exclusive ranges for the
+clip-card implementation above. Manual clip ranges can cross cuts; detector
+boundaries themselves are still controlled by the cached threshold. Full scanning
+adds decode work, while playback and frame captures remain independent of its worker.
 
 ### Port provenance and license
 
@@ -212,8 +306,8 @@ and are scaled for visual navigation; they are not a calibrated audio measuremen
 
 The language choice remains open for later work. Rust/Wasm can be considered for
 a demonstrated computational bottleneck. The later TypeScript cut detector is
-documented above. Linked clip cards, range loops, manual boundary editing and
-timeline zoom remain later experiments.
+documented above. Linked clips, range loops and editable quotation boundaries are
+now implemented; timeline zoom remains a later experiment.
 
 ### Reused from Folder Sort
 

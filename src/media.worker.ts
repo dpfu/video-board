@@ -23,7 +23,7 @@ ctx.onmessage = async ({ data }) => {
       return;
     }
     if (data.task === 'capture') {
-      const sink = new CanvasSink(track, { poolSize: 1 });
+      const sink = new CanvasSink(track, { poolSize: 1, ...(data.width ? { width: data.width } : {}) });
       // currentTime can round just below an exact frame boundary.
       const target = Math.round((data.time || 0) * 1e6) / 1e6 + .000001;
       const frame = await sink.getCanvas(Math.max(start, Math.min(duration - .000001, target)));

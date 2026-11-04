@@ -1,8 +1,8 @@
 import { openDB, type DBSchema } from 'idb';
-import { migrateBoard, type Board, type LegacyBoard } from './model';
+import { migrateBoard, stillAssetId, type Board, type LegacyBoard, type V2Board } from './model';
 
 interface VideoBoardDB extends DBSchema {
-  boards: { key: string; value: Board | LegacyBoard };
+  boards: { key: string; value: Board | LegacyBoard | V2Board };
   assets: { key: string; value: Blob };
 }
 
@@ -36,7 +36,7 @@ export async function loadBoard() {
   return { board, assets };
 }
 
-export const assetKeys = (board: Board) => [...board.videos.flatMap(v => [v.id, ...v.thumbnails]), ...board.stills.map(s => s.id)];
+export const assetKeys = (board: Board) => [...new Set([...board.videos.flatMap(v => [v.id, ...v.thumbnails]), ...board.stills.map(stillAssetId)])];
 export async function saveBoard(board: Board) { await (await database).put('boards', board, 'current'); }
 export async function saveAssets(assets: Map<string, Blob>) {
   const tx = (await database).transaction('assets', 'readwrite');

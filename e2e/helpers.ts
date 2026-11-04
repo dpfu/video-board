@@ -37,8 +37,10 @@ export async function assetHash(page: Page, key: string) {
     const request = indexedDB.open('video-board', 1);
     const db = await new Promise<IDBDatabase>(resolve => { request.onsuccess = () => resolve(request.result); });
     try {
+      const board = await new Promise<Board>(resolve => { const read = db.transaction('boards').objectStore('boards').get('current'); read.onsuccess = () => resolve(read.result); });
+      const assetId = board?.stills.find(s => s.id === key)?.assetId || key;
       const blob = await new Promise<Blob>(resolve => {
-        const read = db.transaction('assets').objectStore('assets').get(key); read.onsuccess = () => resolve(read.result);
+        const read = db.transaction('assets').objectStore('assets').get(assetId); read.onsuccess = () => resolve(read.result);
       });
       const hash = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
       return Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, '0')).join('');
@@ -66,6 +68,7 @@ export async function box(locator: Locator) {
 
 export async function dragBy(page: Page, locator: Locator, dx: number, dy: number, beforeRelease?: () => Promise<void>) {
   await expect(locator).toBeInViewport({ ratio: 1 });
+  await locator.hover(); // Like a click, acquire the control after layout settles.
   const rect = await box(locator), x = rect.x + rect.width / 2, y = rect.y + rect.height / 2;
   await page.mouse.move(x, y); await page.mouse.down();
   try { await page.mouse.move(x + dx, y + dy, { steps: 10 }); await beforeRelease?.(); }

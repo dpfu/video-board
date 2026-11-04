@@ -1,9 +1,10 @@
 import type { VideoCard } from './model';
+import type { SceneAnalysis } from './scenes';
 
 export type Probe = Pick<VideoCard, 'duration' | 'start' | 'sourceWidth' | 'sourceHeight'>;
-export type Analysis = { thumbnails: Blob[]; peaks: number[]; frameTimes: number[]; note?: string };
+export type Analysis = { thumbnails: Blob[]; peaks: number[]; frameTimes: number[]; scenes: SceneAnalysis; note?: string };
 export type CapturedFrame = { blob: Blob; time: number; duration: number };
-export type MediaRequest = { task: 'probe' | 'analyze' | 'capture'; blob: Blob; time?: number };
+export type MediaRequest = { task: 'probe' | 'analyze' | 'capture' | 'scenes'; blob: Blob; time?: number };
 
 // Each request owns its decoder and can be cancelled without touching playback.
 function run<T>(request: MediaRequest, onProgress?: (label: string) => void) {
@@ -24,3 +25,4 @@ function run<T>(request: MediaRequest, onProgress?: (label: string) => void) {
 export const probeVideo = (blob: Blob) => run<Probe>({ task: 'probe', blob });
 export const analyzeVideo = (blob: Blob, onProgress?: (label: string) => void) => run<Analysis>({ task: 'analyze', blob }, onProgress);
 export const captureFrame = (blob: Blob, time: number) => run<CapturedFrame>({ task: 'capture', blob, time });
+export const detectScenes = (blob: Blob, onProgress?: (label: string) => void) => run<SceneAnalysis>({ task: 'scenes', blob }, onProgress);

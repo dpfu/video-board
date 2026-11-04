@@ -1,0 +1,21 @@
+Video Board includes a modified TypeScript port of FFmpeg's scene cut scorer.
+
+Original project: FFmpeg, https://ffmpeg.org/
+Source revision: 38b88335f99e76ed89ff3c93f877fdefce736c13 (n8.1.2)
+Original source files:
+https://github.com/FFmpeg/FFmpeg/blob/38b88335f99e76ed89ff3c93f877fdefce736c13/libavfilter/vf_scdet.c
+https://github.com/FFmpeg/FFmpeg/blob/38b88335f99e76ed89ff3c93f877fdefce736c13/libavfilter/scene_sad.c
+
+Modified file: src/scdet.ts
+Modified on: 2026-11-04
+Changes: TypeScript typed-array interface; reusable previous-frame storage;
+8–16 bit tightly packed sample planes; no FFmpeg filter framework, codec or SIMD code.
+
+The port is licensed under LGPL-2.1-or-later, retaining the upstream terms.
+See COPYING.LGPLv2.1 in this directory. The production build also includes the
+complete port source as licenses/ffmpeg/scdet.ts. The repository contains its
+build configuration and lockfile for rebuilding with a modified port.
+
+Browser resizing/luma conversion, shot-range selection, UI and application
+integration are separate Video Board code under the repository's MIT license.
+This is a cut-detector port, not an FFmpeg codec bundle.

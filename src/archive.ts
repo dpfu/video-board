@@ -33,6 +33,10 @@ function validateBoard(value: unknown): asserts value is Board | LegacyBoard {
       typeof v.showFilmstrip !== 'boolean' || typeof v.showWaveform !== 'boolean' ||
       !['pending', 'ready', 'partial'].includes(v.analysis) || (v.analysisNote !== undefined && typeof v.analysisNote !== 'string')) throw new Error('Invalid video in project backup.');
     ids.add(v.id);
+    const scenes = v.scenes;
+    if (scenes !== undefined && (!scenes || scenes.algorithm !== 'ffmpeg-scdet-v1' || !bounded(scenes.width, 1, 32768) || !bounded(scenes.height, 1, 32768) || !bounded(scenes.threshold, 0, 100) ||
+      !Array.isArray(scenes.times) || scenes.times.length < 1 || scenes.times.length > 3e6 || !Array.isArray(scenes.scores) || scenes.scores.length !== scenes.times.length ||
+      !scenes.times.every((t, i) => bounded(t, 0, v.duration) && (i === 0 || t >= scenes.times[i - 1])) || !scenes.scores.every(s => bounded(s, 0, 100)))) throw new Error('Invalid scene detection data in project backup.');
     for (const key of v.thumbnails) { if (ids.has(key)) throw new Error('Duplicate media identifier.'); ids.add(key); }
   }
   for (const s of b.stills) {
@@ -42,7 +46,7 @@ function validateBoard(value: unknown): asserts value is Board | LegacyBoard {
   }
   if (b.version === 2) {
     for (const t of b.tracks) {
-      if (!card(t) || ids.has(t.id) || !b.videos.some(v => v.id === t.videoId) || !['filmstrip', 'waveform'].includes(t.kind) || !bounded(t.height, 72, 600)) throw new Error('Invalid scrubber module.');
+      if (!card(t) || ids.has(t.id) || !b.videos.some(v => v.id === t.videoId) || !['filmstrip', 'waveform', 'cuts'].includes(t.kind) || !bounded(t.height, t.kind === 'cuts' ? 96 : 72, 600)) throw new Error('Invalid scrubber module.');
       ids.add(t.id);
     }
     const modules = new Map(allCards(b).map(c => [c.id, c]));

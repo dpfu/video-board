@@ -1,0 +1,120 @@
+{
+  "sourceRevision": "38b88335f99e76ed89ff3c93f877fdefce736c13",
+  "generatedWith": "ffmpeg version 8.1.2 Copyright (c) 2000-2026 the FFmpeg developers",
+  "width": 32,
+  "height": 18,
+  "depth": 8,
+  "threshold": 10,
+  "frames": [
+    {
+      "mafd": 0.0,
+      "score": 0.0,
+      "cut": false
+    },
+    {
+      "mafd": 0.0,
+      "score": 0.0,
+      "cut": false
+    },
+    {
+      "mafd": 99.609,
+      "score": 99.609,
+      "cut": true
+    },
+    {
+      "mafd": 0.0,
+      "score": 0.0,
+      "cut": false
+    },
+    {
+      "mafd": 99.609,
+      "score": 99.609,
+      "cut": true
+    },
+    {
+      "mafd": 0.0,
+      "score": 0.0,
+      "cut": false
+    },
+    {
+      "mafd": 99.609,
+      "score": 99.609,
+      "cut": true
+    },
+    {
+      "mafd": 99.609,
+      "score": 0.0,
+      "cut": false
+    },
+    {
+      "mafd": 0.0,
+      "score": 0.0,
+      "cut": false
+    },
+    {
+      "mafd": 25.0,
+      "score": 25.0,
+      "cut": true
+    },
+    {
+      "mafd": 25.0,
+      "score": 0.0,
+      "cut": false
+    },
+    {
+      "mafd": 24.609,
+      "score": 0.391,
+      "cut": false
+    },
+    {
+      "mafd": 25.0,
+      "score": 0.391,
+      "cut": false
+    },
+    {
+      "mafd": 0.0,
+      "score": 0.0,
+      "cut": false
+    },
+    {
+      "mafd": 49.805,
+      "score": 49.805,
+      "cut": true
+    },
+    {
+      "mafd": 6.226,
+      "score": 6.226,
+      "cut": false
+    },
+    {
+      "mafd": 6.226,
+      "score": 0.0,
+      "cut": false
+    },
+    {
+      "mafd": 6.226,
+      "score": 0.0,
+      "cut": false
+    },
+    {
+      "mafd": 0.0,
+      "score": 0.0,
+      "cut": false
+    },
+    {
+      "mafd": 6.226,
+      "score": 6.226,
+      "cut": false
+    },
+    {
+      "mafd": 22.51,
+      "score": 16.284,
+      "cut": true
+    },
+    {
+      "mafd": 6.226,
+      "score": 6.226,
+      "cut": false
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 import type { Board } from './model';
 import { boardBoxes, HEADER, stillImageHeight, timecode, videoImageHeight } from './model';
+import { shotAt, shotRanges } from './scenes';
 
 async function loadImage(blob: Blob) {
   const url = URL.createObjectURL(blob), image = new Image();
@@ -36,7 +37,7 @@ export async function exportBoard(board: Board, assets: Map<string, Blob>, playe
     const gradient = ctx.createLinearGradient(0, card.y, 0, card.y + HEADER); gradient.addColorStop(0, '#51555c'); gradient.addColorStop(1, '#41454b');
     ctx.fillStyle = gradient; ctx.fillRect(card.x, card.y, card.width, HEADER);
     ctx.fillStyle = '#e0e3e9'; ctx.font = '10px system-ui';
-    ctx.fillText(video ? video.name : still ? timecode(still.time) : `${track!.kind === 'filmstrip' ? 'Frames' : 'Audio'} · ${source.name}`, card.x + 9, card.y + 18, card.width - 18);
+    ctx.fillText(video ? video.name : still ? timecode(still.time) : `${track!.kind === 'filmstrip' ? 'Frames' : track!.kind === 'cuts' ? 'Cuts' : 'Audio'} · ${source.name}`, card.x + 9, card.y + 18, card.width - 18);
     const time = players.get(source.id)?.currentTime ?? source.time;
     if (video || still) {
       const imageHeight = video ? videoImageHeight(video) : stillImageHeight(still!, source);
@@ -60,7 +61,8 @@ export async function exportBoard(board: Board, assets: Map<string, Blob>, playe
         ctx.fillStyle = '#e5f0ff'; ctx.fillRect(card.x + 8 + time / source.duration * (card.width - 16), y - 2, 1, 9);
       }
     } else if (track) {
-      const x = card.x + 6, y = card.y + HEADER + 18, w = card.width - 12, h = card.height - HEADER - 25;
+      const x = card.x + 6, y = card.y + HEADER + 18, w = card.width - 12, h = Math.max(8, card.height - HEADER - 25 - (track.kind === 'cuts' ? 22 : 0));
+      const shots = shotRanges(source.scenes, source.duration, source.start), active = shotAt(shots, time);
       ctx.fillStyle = '#a0a5af'; ctx.font = '8px system-ui';
       for (const f of [0, .25, .5, .75, 1]) {
         const label = timecode(source.duration * f, false), labelW = ctx.measureText(label).width;
@@ -83,7 +85,17 @@ export async function exportBoard(board: Board, assets: Map<string, Blob>, playe
         });
         for (let i = source.peaks.length - 1; i >= 0; i--) ctx.lineTo(x + i / (source.peaks.length - 1) * w, middle + Math.sqrt(source.peaks[i] / max) * h * .43);
         ctx.closePath(); ctx.fillStyle = '#a5b1c3'; ctx.fill();
-      } else { ctx.fillStyle = '#929ca9'; ctx.fillText(source.analysisNote || 'Processing…', x + 6, y + h / 2 + 3, w - 12); }
+      } else if (track.kind === 'cuts' && source.scenes) {
+        shots.forEach((shot, i) => {
+          const sx = x + shot.start / source.duration * w, sw = (shot.end - shot.start) / source.duration * w;
+          ctx.fillStyle = i === active ? '#64768d' : i % 2 ? '#424851' : '#363c44'; ctx.fillRect(sx, y, Math.max(0, sw - 1), h);
+          if (sw > 16) { ctx.fillStyle = '#d6dee9'; ctx.fillText(String(i + 1), sx + 4, y + h / 2 + 3, sw - 5); }
+        });
+        ctx.fillStyle = '#a0a5af'; ctx.fillText(`${shots.length} shots · threshold ${source.scenes.threshold}`, x, y + h + 16, w);
+      } else { ctx.fillStyle = '#929ca9'; ctx.fillText(track.kind === 'cuts' ? 'Cut detection unavailable' : source.analysisNote || 'Processing…', x + 6, y + h / 2 + 3, w - 12); }
+      if (track.kind !== 'cuts' && source.scenes) {
+        ctx.fillStyle = '#b7c3d1'; for (const shot of shots.slice(1)) ctx.fillRect(x + shot.start / source.duration * w, y, .7, h);
+      }
       ctx.fillStyle = '#e5f0ff'; ctx.fillRect(x + time / source.duration * w, y - 2, 1, h + 4);
     }
     ctx.restore(); ctx.strokeStyle = '#686c74'; ctx.beginPath(); ctx.roundRect(card.x, card.y, card.width, card.height, 6); ctx.stroke();

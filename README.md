@@ -32,12 +32,15 @@ For a shorter iteration, use `npm test` or `npm run test:watch`; `npm run test:e
 builds and runs just the browser workflows. Browser tests start a separate server
 on **4193** and use fresh contexts, leaving the working board on **5193** alone.
 
-- **15 Vitest checks:** group movement, detaching, independent resizing, docking
+- **23 Vitest checks:** group movement, detaching, independent resizing, docking
   on four sides and at different zoom levels, legacy v1 migration, persistence
-  and atomic rollback after a simulated storage failure.
-- **3 Chromium workflows:** real-media import and analysis; synchronized resized
+  and atomic rollback after a simulated storage failure; native FFmpeg score
+  parity on 8/10-bit sequences, reusable buffers, geometry changes, 16-bit
+  normalization, exact shot boundaries and browser luma preprocessing.
+- **5 Chromium workflows:** real-media import and analysis; synchronized resized
   scrubbers and exact linked-still recapture; magnetic group interactions, Undo
-  and reload; ZIP roundtrip, rejected incomplete backups and offscreen PNG export.
+  and reload; ZIP roundtrip, rejected incomplete backups and offscreen PNG export;
+  known-cut detection, cached threshold adjustment, shot seeking and older boards.
 
 The versioned [synthetic fixture](e2e/fixtures/README.md) contains no private media.
 Browser workflows use the actual decoder, workers and IndexedDB. The unit storage
@@ -45,13 +48,68 @@ checks use `fake-indexeddb`. Disposable reports, downloads and failure traces go
 under ignored `tmp/playwright/`; open the HTML report with
 `npx playwright show-report tmp/playwright/report`.
 
-Verified on **bugglzwerg, 4 November 2026**: `npm run check` passed all 18 checks
-and the production build. The browser portion took about 11 seconds. An initial
-runner viewport mismatch was fixed; application code needed no changes.
+Verified on **bugglzwerg, 4 November 2026** after adding shot detection:
+`npm run check` passed all **28 checks** and the production build. The browser
+portion took about 15 seconds. Visual inspection covered the resized Cuts module
+and its PNG export. The initial pre-detector suite had passed 18 checks in about
+11 seconds after correcting a runner viewport mismatch.
 Automated coverage currently targets Chromium with VP9/Opus, not a codec/browser
 compatibility matrix.
 
-## Current: modular graphite interface · 4 November 2026
+## Current: local shot detection · 4 November 2026
+
+Daniel chose to port FFmpeg's **scdet** scorer to TypeScript, keeping native
+browser decoding through Mediabunny/WebCodecs. There is no FFmpeg binary/Wasm
+dependency and this change does not extend the browser's codec support.
+
+- New imports automatically scan consecutive frames in the analysis worker.
+  The same sequential decode supplies frame timestamps and twelve thumbnails.
+  Analysis uses 160px-wide canvases converted to 8-bit luma; only the previous
+  luma plane and numeric scores/timestamps are retained, with no extra video file.
+- Use the player's **scissors icon / Add cuts scrubber** to add a compact,
+  dockable **Cuts** module. On an older video without cached detection, this
+  performs the scan once without replacing its original, thumbnails or waveform.
+- Each segment is a proposed shot. Click it to seek its source to the shot's
+  first frame. The active range follows the shared playhead. Frames, Audio and
+  the player's position bar also show cut markers.
+- **Threshold** defaults to FFmpeg's 10; lower values find more cuts. Adjustment
+  uses cached scores immediately, starting no decoder worker. Duplicate Cuts
+  modules share their source's threshold. Their minimum height keeps the controls
+  accessible while resizing.
+- Scores, threshold and Cuts geometry persist through reload and v2 ZIP backups.
+  PNG export includes the shot strip. Old v1/v2 projects without scene metadata
+  still open normally.
+
+The scorer preserves FFmpeg's mean absolute frame difference, change-of-difference
+rule, `2^bitDepth` normalization and inclusive threshold. For identical sample
+planes, tests compare every score and decision against native FFmpeg 8.1.2.
+Browser downscaling and RGB-to-luma conversion are separate preprocessing, so
+results need not equal FFmpeg run directly on the original YUV pixels.
+
+These are visual **shot** proposals, not semantic scene labels. Gradual transitions,
+similar-looking cuts, flashes and rapid edits can be missed or misclassified.
+There is no extra adaptive filter or minimum-shot suppression layered onto this
+port. `shotRanges`/`shotAt` expose source-linked, end-exclusive ranges for the next
+clip-card iteration; hover-playing clip cards and editable manual boundaries are
+not implemented yet. Full scanning adds decode work, while playback and frame
+captures remain independent of its worker.
+
+### Port provenance and license
+
+The numeric core in [src/scdet.ts](src/scdet.ts) is a modified port of
+`get_scene_score` and the scalar SAD loop from FFmpeg **n8.1.2**, revision
+`38b88335f99e76ed89ff3c93f877fdefce736c13`. That file retains **LGPL-2.1-or-later**;
+the original Video Board application, preprocessing and UI remain **MIT**.
+The [notice](public/licenses/ffmpeg/NOTICE.txt) links both upstream source files
+and describes the modifications. The production build ships the LGPL text,
+notice and complete port source under `licenses/ffmpeg/`; the repository contains
+the build configuration and lockfile needed to rebuild it with a modified port.
+
+The [native reference fixtures](tests/fixtures/README.md) are generated with
+FFmpeg, and the [browser fixture](e2e/fixtures/README.md) has four known cuts.
+Regeneration requires native FFmpeg; ordinary checks use the committed fixtures.
+
+## Modular graphite interface · 4 November 2026
 
 Daniel requested compact, tactile grey modules that magnetically dock and can
 still be resized independently. The interface now uses shallow bevels, 28px
@@ -78,7 +136,7 @@ headers and small controls. This replaces the initial green workspace design.
   old v1 ZIPs and automatically turns their embedded tracks into docked modules.
   Existing video/still asset IDs and still timestamps are preserved.
 
-Automatic cut detection and a cut-marker module remain future experiments.
+This modular pass preceded the shot detector described above.
 Timeline resizing currently changes the visual precision over the full duration;
 it does not introduce a separately zoomed time interval.
 
@@ -148,8 +206,9 @@ rounding of the browser player's `currentTime`. Waveforms combine channel peaks
 and are scaled for visual navigation; they are not a calibrated audio measurement.
 
 The language choice remains open for later work. Rust/Wasm can be considered for
-a demonstrated computational bottleneck. Automatic cut suggestions, scene ranges,
-range loops and timeline zoom remain later experiments.
+a demonstrated computational bottleneck. The later TypeScript cut detector is
+documented above. Linked clip cards, range loops, manual boundary editing and
+timeline zoom remain later experiments.
 
 ### Reused from Folder Sort
 

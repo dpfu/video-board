@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { Camera, Film, Pause, Play, Repeat2, Trash2, Volume2, VolumeX, AudioLines } from 'lucide-react';
+import { Camera, Film, Pause, Play, Repeat2, Scissors, Trash2, Volume2, VolumeX, AudioLines } from 'lucide-react';
 import { IconButton } from './Icons';
 import { Timeline } from './Timeline';
 import { clamp, timecode, videoImageHeight, type TrackKind, type VideoCard } from './model';
@@ -94,6 +94,7 @@ export const VideoPlayer = forwardRef<PlayerHandle, {
       <span className="control-spacer" />
       <IconButton icon={Film} label="Add thumbnail scrubber" onClick={() => onAddTrack('filmstrip')} />
       <IconButton icon={AudioLines} label="Add audio scrubber" onClick={() => onAddTrack('waveform')} />
+      <IconButton icon={Scissors} label="Add cuts scrubber" onClick={() => onAddTrack('cuts')} />
       <IconButton className="capture" icon={Camera} label="Capture still" disabled={busy} onClick={() => { element.current?.pause(); onCapture(desiredTime.current); }} />
     </div>
     <Timeline video={video} time={time} mode="position" urls={urls} stillTimes={stillTimes} onSeek={seek} />

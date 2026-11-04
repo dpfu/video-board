@@ -6,7 +6,7 @@ import { VideoPlayer, type PlayerHandle } from './VideoPlayer';
 import { Still } from './Still';
 import { Track } from './Track';
 import { applySnap, detachModule, findSnap, groupIds, reflow, rootId, translate, type Snap } from './docking';
-import { analyzeVideo, captureFrame, probeVideo } from './media';
+import { analyzeVideo, captureFrame, detectScenes, probeVideo } from './media';
 import { backupBoard, restoreArchive } from './archive';
 import { exportBoard } from './export';
 import { download, safeFilename } from './download';
@@ -36,6 +36,8 @@ export function App() {
   const [removed, setRemoved] = useState<Removed | null>(null);
   const [operation, setOperation] = useState(false);
   const [snap, setSnap] = useState<Snap | null>(null);
+  const [sceneBusy, setSceneBusy] = useState(new Set<string>());
+  const sceneJobs = useRef(new Set<string>());
   const snapRef = useRef<Snap | null>(null);
   const [moving, setMoving] = useState(new Set<string>());
   const stage = useRef<HTMLDivElement>(null);
@@ -80,10 +82,29 @@ export function App() {
         await saveAssets(additions);
         if (generation !== epoch.current) return;
         installAssets(additions);
-        patchVideo(id, { thumbnails: [...additions.keys()], peaks: result.peaks, frameTimes: result.frameTimes, analysis: result.note && result.note !== 'No audio track' ? 'partial' : 'ready', analysisNote: result.note });
+        patchVideo(id, { thumbnails: [...additions.keys()], peaks: result.peaks, frameTimes: result.frameTimes, scenes: result.scenes, analysis: result.note && result.note !== 'No audio track' ? 'partial' : 'ready', analysisNote: result.note });
       } catch (error) {
         if (generation === epoch.current) patchVideo(id, { analysis: 'partial', analysisNote: error instanceof Error ? error.message : 'Media analysis failed' });
       } finally { if (generation === epoch.current) setWorking(''); }
+    });
+  }
+
+  function scanScenes(id: string) {
+    const video = current.current.videos.find(v => v.id === id), blob = assets.current.get(id);
+    if (!video || !blob || video.scenes || video.analysis === 'pending' || sceneJobs.current.has(id)) return;
+    sceneJobs.current.add(id); setSceneBusy(new Set(sceneJobs.current));
+    const generation = epoch.current;
+    analysisQueue.current = analysisQueue.current.then(async () => {
+      try {
+        if (generation !== epoch.current || !current.current.videos.some(v => v.id === id)) return;
+        const scenes = await detectScenes(blob, label => { if (generation === epoch.current) setWorking(label); });
+        if (generation === epoch.current) patchVideo(id, { scenes });
+      } catch (error) {
+        if (generation === epoch.current) setNotice(error instanceof Error ? error.message : 'Cut detection failed.');
+      } finally {
+        sceneJobs.current.delete(id); setSceneBusy(new Set(sceneJobs.current));
+        if (generation === epoch.current) setWorking('');
+      }
     });
   }
 
@@ -128,8 +149,8 @@ export function App() {
       });
       else change(b => reflow(mapCards(b, card => {
         if (card.id !== g.id) return card;
-        const track = b.tracks.some(t => t.id === card.id), video = b.videos.some(v => v.id === card.id);
-        return { ...card, width: clamp((g.origin.width || 300) + dx, track ? 240 : video ? 320 : 260, 1600), height: clamp((g.origin.height || 100) + dy, track ? 72 : video ? 190 : 110, track ? 600 : 1200) };
+        const track = b.tracks.find(t => t.id === card.id), video = b.videos.some(v => v.id === card.id);
+        return { ...card, width: clamp((g.origin.width || 300) + dx, track ? 240 : video ? 320 : 260, 1600), height: clamp((g.origin.height || 100) + dy, track ? track.kind === 'cuts' ? 96 : 72 : video ? 190 : 110, track ? 600 : 1200) };
       })));
     };
     const finish = (commit: boolean) => {
@@ -243,9 +264,10 @@ export function App() {
       const parent = boardBoxes(b).filter(c => group.has(c.id)).sort((a, c) => c.y + c.height - a.y - a.height)[0];
       const track: TrackCard = duplicate
         ? { ...duplicate, id: crypto.randomUUID(), x: duplicate.x + 28, y: duplicate.y + 28, dock: undefined, z: topZ(b) }
-        : { id: crypto.randomUUID(), videoId, kind, x: parent.x, y: parent.y + parent.height + DOCK_GAP, width: video.width, height: kind === 'filmstrip' ? 104 : 88, z: topZ(b), dock: { to: parent.id, side: 'bottom', offset: 0 } };
+        : { id: crypto.randomUUID(), videoId, kind, x: parent.x, y: parent.y + parent.height + DOCK_GAP, width: video.width, height: kind === 'filmstrip' ? 104 : kind === 'cuts' ? 116 : 88, z: topZ(b), dock: { to: parent.id, side: 'bottom', offset: 0 } };
       setSelected(track.id); return { ...b, tracks: [...b.tracks, track] };
     });
+    if (kind === 'cuts') scanScenes(videoId);
   }
   async function makeStill(videoId: string, requested: number, existingId?: string) {
     const video = current.current.videos.find(v => v.id === videoId), blob = assets.current.get(videoId);
@@ -377,8 +399,8 @@ export function App() {
         {board.tracks.map(track => {
           const video = board.videos.find(v => v.id === track.videoId); if (!video) return null;
           return <article key={track.id} className={`board-card track-card ${moduleClass(track.id)}`} data-module-id={track.id} data-track-kind={track.kind} data-video-id={video.id} data-docked-to={track.dock?.to} style={{ left: track.x, top: track.y, width: track.width, height: track.height, zIndex: track.z }} onPointerDown={() => setSelected(track.id)}>
-            <Track track={track} video={video} urls={urls} stillTimes={board.stills.filter(s => s.videoId === video.id).map(s => s.time)} dockControls={controlsFor(track.id)} busy={busy.has(video.id) || editingLocked} onDrag={event => begin(event, 'move', track.id)} onSeek={time => players.current.get(video.id)?.seek(time)} onCapture={time => void makeStill(video.id, time)} onDuplicate={() => addTrack(video.id, track.kind, track)} onDelete={() => remove(track.id)} onJump={() => jump({ videoId: video.id, time: players.current.get(video.id)?.time() ?? video.time } as StillCard)} />
-            <button type="button" className="resize-handle" aria-label={`Resize ${track.kind === 'filmstrip' ? 'frames' : 'audio'} scrubber`} onPointerDown={event => begin(event, 'resize', track.id)} />
+            <Track track={track} video={video} urls={urls} stillTimes={board.stills.filter(s => s.videoId === video.id).map(s => s.time)} dockControls={controlsFor(track.id)} busy={busy.has(video.id) || editingLocked} sceneBusy={sceneBusy.has(video.id) || video.analysis === 'pending'} onRetryScenes={() => scanScenes(video.id)} onThreshold={threshold => { if (video.scenes) patchVideo(video.id, { scenes: { ...video.scenes, threshold } }); }} onDrag={event => begin(event, 'move', track.id)} onSeek={time => players.current.get(video.id)?.seek(time)} onCapture={time => void makeStill(video.id, time)} onDuplicate={() => addTrack(video.id, track.kind, track)} onDelete={() => remove(track.id)} onJump={() => jump({ videoId: video.id, time: players.current.get(video.id)?.time() ?? video.time } as StillCard)} />
+            <button type="button" className="resize-handle" aria-label={`Resize ${track.kind === 'filmstrip' ? 'frames' : track.kind === 'cuts' ? 'cuts' : 'audio'} scrubber`} onPointerDown={event => begin(event, 'resize', track.id)} />
           </article>;
         })}
       </div>

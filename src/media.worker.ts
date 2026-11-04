@@ -1,5 +1,7 @@
-import { Input, ALL_FORMATS, BlobSource, CanvasSink, EncodedPacketSink, AudioSampleSink } from 'mediabunny';
+import { Input, ALL_FORMATS, BlobSource, CanvasSink, AudioSampleSink } from 'mediabunny';
 import type { Analysis, MediaRequest } from './media';
+import { Scdet } from './scdet';
+import { DEFAULT_CUT_THRESHOLD, rgbaToLuma, type SceneAnalysis } from './scenes';
 
 const ctx = self as unknown as { onmessage: ((event: MessageEvent<MediaRequest>) => void) | null; postMessage: (value: unknown) => void };
 const progress = (label: string) => ctx.postMessage({ progress: label });
@@ -30,20 +32,34 @@ ctx.onmessage = async ({ data }) => {
       return;
     }
 
-    const result: Analysis = { thumbnails: [], peaks: [], frameTimes: [] };
-    progress('Reading frame times');
-    const packets = new EncodedPacketSink(track);
-    for await (const packet of packets.packets(undefined, undefined, { metadataOnly: true })) {
-      if (packet.timestamp >= 0 && packet.timestamp < duration) result.frameTimes.push(packet.timestamp);
+    const scenes: SceneAnalysis = { algorithm: 'ffmpeg-scdet-v1', width: 160, height: 90, threshold: DEFAULT_CUT_THRESHOLD, times: [], scores: [] };
+    const result: Analysis = { thumbnails: [], peaks: [], frameTimes: [], scenes };
+    const detector = new Scdet();
+    const sink = new CanvasSink(track, { width: 160, poolSize: 1 });
+    let luma = new Uint8Array(0), nextThumbnail = 0, lastProgress = -1;
+    // Decode sequentially once: every frame contributes to cut scores and frame
+    // stepping; the same canvases supply thumbnails. Only one previous luma
+    // plane is retained by the detector, never a collection of decoded frames.
+    for await (const frame of sink.canvases()) {
+      const { width, height } = frame.canvas;
+      const pixels = frame.canvas.getContext('2d') as OffscreenCanvasRenderingContext2D | null;
+      if (!pixels) throw new Error('Scene detection could not read video pixels.');
+      if (luma.length !== width * height) luma = new Uint8Array(width * height);
+      rgbaToLuma(pixels.getImageData(0, 0, width, height).data, luma);
+      const { score } = detector.push(luma, width, height);
+      if (frame.timestamp >= 0 && frame.timestamp < duration) {
+        scenes.width = width; scenes.height = height;
+        scenes.times.push(frame.timestamp); scenes.scores.push(score);
+        result.frameTimes.push(frame.timestamp);
+      }
+      if (data.task === 'analyze') while (nextThumbnail < 12 && frame.timestamp + frame.duration > Math.max(start, duration * nextThumbnail / 12)) {
+        result.thumbnails.push(await toBlob(frame.canvas)); nextThumbnail++;
+      }
+      const percent = Math.min(100, Math.floor((frame.timestamp + frame.duration) / duration * 10) * 10);
+      if (percent !== lastProgress) { progress(`Detecting cuts · ${percent}%`); lastProgress = percent; }
     }
-    result.frameTimes = [...new Set(result.frameTimes)].sort((a, b) => a - b);
-    progress('Making thumbnails');
-    const thumbSink = new CanvasSink(track, { width: 160, poolSize: 1 });
-    const times = Array.from({ length: 12 }, (_, i) => Math.max(start, duration * i / 12));
-    for await (const frame of thumbSink.canvasesAtTimestamps(times)) {
-      if (!frame) continue;
-      result.thumbnails.push(await toBlob(frame.canvas));
-    }
+    if (!scenes.times.length) throw new Error('No frames could be read for scene detection.');
+    if (data.task === 'scenes') { ctx.postMessage({ result: scenes }); return; }
     progress('Reading audio');
     try {
       const audio = await input.getPrimaryAudioTrack();

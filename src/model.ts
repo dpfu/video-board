@@ -1,3 +1,5 @@
+import type { SceneAnalysis } from './scenes';
+
 export type Point = { x: number; y: number };
 export type Camera = Point & { scale: number };
 export type Dock = { to: string; side: 'top' | 'right' | 'bottom' | 'left'; offset: number };
@@ -14,11 +16,12 @@ export type VideoCard = Card & {
   frameTimes: number[];
   analysis: 'pending' | 'ready' | 'partial';
   analysisNote?: string;
+  scenes?: SceneAnalysis;
   showFilmstrip: boolean;
   showWaveform: boolean;
 };
 export type StillCard = Card & { videoId: string; time: number; duration: number };
-export type TrackKind = 'filmstrip' | 'waveform';
+export type TrackKind = 'filmstrip' | 'waveform' | 'cuts';
 export type TrackCard = Card & { videoId: string; kind: TrackKind; height: number };
 export type Board = {
   version: 2;

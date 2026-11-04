@@ -19,4 +19,9 @@ it must stay reproducible without private media or external downloads.
 No deployment or shared remote exists yet. Default future internal/private
 hosting is Uni-GitLab; do not create or publish a remote without task context
 supporting that step. Keep the first prototype's implementation choices simple;
-Rust/Wasm and automatic cut detection are open future options.
+Rust/Wasm remains a future option. Daniel chose a TypeScript port of FFmpeg's
+scdet on 4 November 2026. Keep the port in `src/scdet.ts` under its upstream
+LGPL-2.1-or-later terms, with the pinned revision, notices, license text and
+build-emitted source intact. The application/UI remain MIT. This port adds cut
+scoring, not FFmpeg codecs. Keep its native-reference fixtures and real-media
+browser checks; never regenerate expected scores with the port itself.

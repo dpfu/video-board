@@ -80,7 +80,7 @@ export async function scrub(page: Page, slider: Locator, fraction: number) {
 
 export async function expectSynchronized(page: Page, time: number) {
   await expect.poll(async () => {
-    const times = await page.getByRole('slider').evaluateAll(elements => elements.map(el => Number(el.getAttribute('aria-valuenow'))));
+    const times = await page.getByRole('slider', { name: /^Scrub / }).evaluateAll(elements => elements.map(el => Number(el.getAttribute('aria-valuenow'))));
     const actual = await page.locator('video').evaluate(el => (el as HTMLVideoElement).currentTime);
     return Math.max(Math.abs(actual - time), ...times.map(t => Math.abs(t - time)));
   }).toBeLessThan(.04);

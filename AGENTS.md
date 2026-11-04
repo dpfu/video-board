@@ -15,6 +15,7 @@ accepted direction and proposals. README holds run/verification details; link
 the spec rather than starting parallel plan files. In particular, coded still
 regions remain retimeable with geometry fixed relative to the image; the earlier
 freeze-after-coding suggestion was rejected by Daniel.
+Region selection starts with manual rectangles; model segmentation is deferred.
 
 Preserve local-first behavior and the separate `video-board` IndexedDB database.
 Use the compact graphite/grey modular design requested by Daniel, with Lucide

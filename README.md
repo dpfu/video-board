@@ -5,8 +5,9 @@ The first iteration focuses on mouse scrubbing and **linked stills**: independen
 images whose source video and frame timestamp remain editable.
 
 Product decisions and the evolving plan live in [SPEC.md](SPEC.md), including
-linked clips, free quotations, coding, editable-frame regions and the browser
-segmentation option. This README records implemented behavior and verification.
+linked clips, free quotations, coding, editable-frame rectangular regions and
+deferred segmentation research. This README records implemented behavior and
+verification.
 
 ## Run
 

@@ -41,7 +41,8 @@ Keep it compact, responsive and methodologically useful: **select → code → m
 | PNG board export, local persistence, atomic ZIP backup/restore | Implemented. |
 | Linked clip cards with muted hover preview and editable ranges | Agreed direction; not implemented. |
 | Free quotations, whole-video/clip/subsegment coding, region coding, memos and retrieval | Agreed conceptual model; not implemented. |
-| Browser segmentation for proposing still regions | Requested exploration; documented candidate below, no model selected or integrated. |
+| Still-region selection | Planned: manual, movable/resizable rectangles for the first version, chosen by Daniel. |
+| Browser segmentation for proposing still regions | Deferred by Daniel for the first version; research retained below. |
 
 ## Interface and interaction
 
@@ -120,11 +121,9 @@ it. A code's retrieval view still reveals the full extent of that coded clip.
 - Store geometry in source-image coordinates (for example normalized fractions),
   excluding letterboxing and card controls. Resizing or moving a board view must
   not move the selection within the image.
-- Begin with adjustable rectangles. For masks, the consistent proposed behavior
-  is to keep the mask geometry through retiming too; offer an explicit
-  re-segmentation action rather than silently generating a different shape.
-- Retiming invalidates cached image embeddings and pending model requests for
-  the previous frame. It does not invalidate the existing quotation's geometry.
+- **First version: manually draw a rectangle, then move or resize it as needed.**
+  It becomes a free region quotation and can receive codes and a memo. Model
+  segmentation and masks are deferred; no model setup is needed for this scope.
 
 Source ID, frame time/range and geometry provide the traceable evidence anchor.
 Preserve access to the full frame and surrounding video. Keep explicit edits
@@ -208,7 +207,8 @@ selected for this prototype. The interface can remain TypeScript either way.
 
 Daniel asked whether a model can propose regions for coding **inside the browser**.
 Yes: **SlimSAM through Transformers.js/ONNX Runtime Web** is a documented candidate.
-This is an exploration result, not an accepted model choice or completed feature.
+After this exploration, Daniel chose **simple manual regions first**. Keep the
+research here for possible later use; segmentation is outside the first version.
 
 - [Model and point-prompt example](https://huggingface.co/Xenova/slimsam-77-uniform).
 - [Browser demo](https://huggingface.co/spaces/Xenova/segment-anything-web).
@@ -222,8 +222,8 @@ This is an exploration result, not an accepted model choice or completed feature
   allows shipping model/runtime files locally and disabling remote model loads.
   A first download/setup can be cached; research images need not be uploaded.
 
-Proposed KISS interaction: choose **Select object**, click a region, refine the
-candidate with include/exclude clicks or a box, then accept it as a free region
+If revisited, the proposed interaction is: choose **Select object**, click a
+region, refine the candidate with include/exclude clicks or a box, then accept it as a free region
 quotation. Assign codes/memos separately. A mask proposes **pixel geometry**; it
 does not determine the analytical meaning or invent a qualitative code.
 
@@ -240,30 +240,29 @@ for machine proposals. Retiming preserves the accepted shape; generating a new
 proposal is explicit. A model change must not silently alter saved quotations.
 Weights/runtime belong to the application cache rather than each project ZIP.
 
-Start with user-guided selection. Whole-image automatic region proposals can be
-evaluated later if useful; generating every possible object on every still is
-not the first milestone. Rectangles remain a usable alternative when the model
-is unavailable or proposes an unsuitable shape. Larger SAM-family models are
-possible alternatives, not current dependencies or promised quality upgrades.
+A later model experiment would start with user-guided selection. Whole-image
+automatic proposals can be evaluated only if useful. Manual rectangles remain
+the baseline. Larger SAM-family models are possible alternatives, not current
+dependencies or promised quality upgrades.
 
 ## Proposed implementation sequence and review checks
 
 1. Introduce stable source/quotation/view references and linked range players.
    Create, trim, hover-preview and reopen a clip without new video assets;
    default to a detected shot, while preserving manual range freedom.
-2. Add manual region quotations plus a small shared coding/memo/retrieval layer.
-   Exercise whole video, whole clip and nested segment coding; retime a still
+2. Add manual rectangular region quotations plus a small shared coding/memo/
+   retrieval layer. Exercise whole video, whole clip and nested segment coding; retime a still
    without moving its region or losing codes. Retrieve across both media forms.
 3. Extend ZIP and CSV roundtrips for the actual analysis data, including duplicate
    views, overlapping ranges and code renaming. Keep context links usable.
-4. Try segmentation as an optional region-selection aid on a small set of stills.
-   Confirm entirely local inference, bounded memory, cancellation on retiming,
-   saved masks independent of model availability, and responsive board gestures.
+
+Segmentation is deferred from this sequence. If revisited as a separate small
+experiment, check local inference, bounded memory, cancellation on retiming,
+saved masks independent of model availability, and responsive board gestures.
 
 Keep checks focused on these behaviors and existing storage/interaction risks.
-This sequence is a proposal for the next iterations, not an instruction to build
-all four steps immediately. Transcripts, semantic/AI coding, automatic object
-tracking through video, code hierarchies, collaboration, intercoder statistics,
+Use one small complete iteration at a time. Transcripts, semantic/AI coding,
+automatic object tracking through video, code hierarchies, collaboration, intercoder statistics,
 full audit histories, spectrograms, source-player A/B loop controls and timeline
 zoom remain later options requiring their own use case. Avoid choosing a full
 qualitative-analysis suite architecture before the first source-linked coding
@@ -290,5 +289,7 @@ loop is useful.
   retimeable and its region stays in the same image-relative place. This
   supersedes the earlier freezing/new-still suggestion.
 - Daniel asked about browser-local segmentation for still regions, then asked
-  to keep the accumulated discussion in one maintained project spec. No model
-  integration or new coding implementation has been requested in this last step.
+  to keep the accumulated discussion in one maintained project spec.
+- Daniel then chose simple manual regions for the first version: draw, move and
+  resize a rectangle, keeping the agreed retiming behavior. Browser segmentation
+  research is retained as a deferred option rather than a current milestone.

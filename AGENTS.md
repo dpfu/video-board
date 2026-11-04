@@ -8,6 +8,14 @@ behavior/storage checks and real-media Playwright workflows. Run `npm run check`
 Browser tests use their own origin on port 4193 and fresh contexts; never point
 them at Daniel's working board on port 5193 or use private research media.
 
+Keep Daniel's product discussion and decisions in `SPEC.md` as the single working
+spec. Update it when the discussion changes an agreement, preserve superseded
+decisions briefly with their rationale, and distinguish implemented behavior,
+accepted direction and proposals. README holds run/verification details; link
+the spec rather than starting parallel plan files. In particular, coded still
+regions remain retimeable with geometry fixed relative to the image; the earlier
+freeze-after-coding suggestion was rejected by Daniel.
+
 Preserve local-first behavior and the separate `video-board` IndexedDB database.
 Use the compact graphite/grey modular design requested by Daniel, with Lucide
 icons. The earlier green Folder Sort palette is superseded. Do not change Folder Sort as

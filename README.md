@@ -4,6 +4,10 @@ A small, local-first experiment for exploring short videos on a spatial board.
 The first iteration focuses on mouse scrubbing and **linked stills**: independent
 images whose source video and frame timestamp remain editable.
 
+Product decisions and the evolving plan live in [SPEC.md](SPEC.md), including
+linked clips, free quotations, coding, editable-frame regions and the browser
+segmentation option. This README records implemented behavior and verification.
+
 ## Run
 
 ```sh

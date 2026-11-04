@@ -17,6 +17,40 @@ builds the app; `npm run preview` serves that build at the same address.
 Reuse an already running preview. Cora's retained local dev server records its
 PID and output in ignored `tmp/dev-server.pid` and `tmp/dev-server.log`.
 
+## Checks
+
+The small suite follows Folder Sort and SortBoard's split between Vitest behavior
+checks and Playwright browser workflows. Daniel requested it after the initial
+prototype's manual verification.
+
+```sh
+npm run test:e2e:install # Chromium setup, once after npm ci on a new machine
+npm run check           # unit/storage tests, TypeScript build, browser workflows
+```
+
+For a shorter iteration, use `npm test` or `npm run test:watch`; `npm run test:e2e`
+builds and runs just the browser workflows. Browser tests start a separate server
+on **4193** and use fresh contexts, leaving the working board on **5193** alone.
+
+- **15 Vitest checks:** group movement, detaching, independent resizing, docking
+  on four sides and at different zoom levels, legacy v1 migration, persistence
+  and atomic rollback after a simulated storage failure.
+- **3 Chromium workflows:** real-media import and analysis; synchronized resized
+  scrubbers and exact linked-still recapture; magnetic group interactions, Undo
+  and reload; ZIP roundtrip, rejected incomplete backups and offscreen PNG export.
+
+The versioned [synthetic fixture](e2e/fixtures/README.md) contains no private media.
+Browser workflows use the actual decoder, workers and IndexedDB. The unit storage
+checks use `fake-indexeddb`. Disposable reports, downloads and failure traces go
+under ignored `tmp/playwright/`; open the HTML report with
+`npx playwright show-report tmp/playwright/report`.
+
+Verified on **bugglzwerg, 4 November 2026**: `npm run check` passed all 18 checks
+and the production build. The browser portion took about 11 seconds. An initial
+runner viewport mismatch was fixed; application code needed no changes.
+Automated coverage currently targets Chromium with VP9/Opus, not a codec/browser
+compatibility matrix.
+
 ## Current: modular graphite interface · 4 November 2026
 
 Daniel requested compact, tactile grey modules that magnetically dock and can
@@ -55,7 +89,8 @@ it below Frames, resizing Frames with Audio following, docking a still to a
 player, duplicated synchronized Audio views, playback, PNG export, ZIP reopening
 and reload. Restored widths, heights and dock targets matched the saved v2 ZIP;
 its original video matched the source bytes. The final browser console had no
-errors. The production/TypeScript build passed; no test suite was added.
+errors. The production/TypeScript build passed. This interactive pass preceded
+the automated suite documented above.
 
 ### Pre-migration recovery
 
@@ -135,7 +170,8 @@ stashes, collaboration and content-similarity infrastructure were not copied.
 
 ## Verification and boundaries
 
-Per Daniel's brief this prototype has no test suite. `npm run build` passed.
+The initial prototype followed Daniel's no-tests brief; the later suite is
+documented under **Checks** above. Its initial `npm run build` passed.
 Interactive checks in the ChatGPT in-app browser covered import, playback/pause, thumbnail and waveform
 scrubbing, timecode editing, frame stepping, source seeking, independent stills,
 card dragging/resizing, track toggles, fit/zoom, reload, PNG export and ZIP reopen.
@@ -154,6 +190,7 @@ ZIP carries only the assets referenced by the board.
 Source code stays outside UNIverse. This checkout is local, with no shared remote
 or deployment created. The default destination for a future private/internal
 remote is Uni-GitLab; publication or a different destination remains a separate
-choice. Synthetic QA media, downloads and screenshots belong in ignored `tmp/`.
+choice. Disposable QA media, downloads and screenshots belong in ignored `tmp/`;
+the generated regression fixture under `e2e/fixtures/` is versioned deliberately.
 
 Project context: [SortBoard dossier experiment register](</Users/daniel/UNIverse/41 WIP/41.018 klagenfurt vibe coding/experiments/README.md>).

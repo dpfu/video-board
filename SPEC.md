@@ -75,6 +75,10 @@ working board. No browser/runtime errors or failed HTTP responses were observed.
 **Open findings, reproduced on that build.** These are proposed priorities for
 the next implementation pass, not completed fixes or new scope agreements:
 
+Status after the coding iteration below: findings **1–4 are addressed**;
+**5 (default placement) remains open**. Retain these reproductions as evidence
+of the original release's behavior.
+
 1. **Keyboard Undo is inconsistent.** Duplicate a clip with its action button,
    then press Cmd+Z while the button retains focus: no Undo occurs. Move a
    module, focus an image region and press Cmd+Shift+Z: the supposed Redo
@@ -178,6 +182,48 @@ frame to preserve a positive duration; extending the out-point does not revisit
 that clamp. Re-entering the in-point gives the requested boundary. Make this
 constraint visible or improve the marking flow; the observed source reveal
 correctly sought the stored boundary.
+
+## Coding iteration · 5 November 2026
+
+Daniel requested implementation and further demo exploration after the reviews.
+The following changes are **implemented and verified**, preserving schema v3,
+shared quotations and the no-video-copy rule:
+
+- Playback, scrubbing and still time controls retain the active region/range;
+  an asynchronous still update also preserves that selection. Explicit whole
+  video/still/clip coding actions continue to choose their named scope.
+- A pending segment hides the previous quotation's editor and disables code
+  assignment/creation until **Save free quotation**. Invalid typed boundaries
+  block Save instead of silently saving the previous valid range. Escape in a
+  time field restores that field without canceling the segment.
+- Code creation from the panel and popover reuses an existing trimmed,
+  case-insensitive name; assigning an already assigned code through creation
+  is a no-op. Existing distinct code identities are not merged.
+- Following a code clears the originating search. Quotation search includes
+  assigned-code definitions; source search now filters source names too.
+- Retrieved evidence is raised and brought into view. The toolbar/popover's
+  **Open codes** action reveals the existing offscreen module. Region pointer
+  selection does not move the camera mid-gesture.
+- Video/clip cards display code chips, duplicate still/clip views show their
+  shared relationship, and PNG includes clip codes plus named-region codes.
+- Cmd/Ctrl+Z works after button actions and keeps native text editing Undo.
+  Shift+Cmd/Ctrl+Z no longer consumes another Undo; app Redo is not implemented.
+
+The local demo used generated landscape/audio and silent portrait videos,
+overlapping coded regions, a coded clip and a coded nested segment. Trimming
+and deleting the parent preserved the child's absolute boundaries and coding;
+Undo restored the relationship. Final board: **2 sources, 2 stills, 3 regions,
+1 clip view, 10 quotations and 3 codes**. CSV matched all quotations, memos and
+assignments; a fresh-session ZIP restore matched the board exactly, with each
+byte-identical original stored once. PNG labels were visually checked. Evidence
+and the reusable demo ZIP are local in `tmp/coding-pass-2026-11-05/`.
+
+`npm run check` passed **30 unit/storage checks and 15 Chromium workflows**.
+The five new browser regressions cover selection through linked retiming,
+draft/invalid-time safety, code reuse/definition retrieval, keyboard Undo, and
+covered/offscreen retrieval. The earlier reviews' default placement, boundary
+clamp feedback, fractional ticks, ZIP error wording and small-scale readability
+remain proposals. A dedicated focus-selection action is still open.
 
 ## Interface and interaction
 

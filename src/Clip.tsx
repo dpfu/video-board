@@ -3,10 +3,11 @@ import { ArrowUpLeft, BookOpen, Camera, CopyPlus, Pause, PinOff, Play, ScanLine,
 import { IconButton } from './Icons';
 import { ModuleGrip, UndockButton, type DockControls } from './ModuleGrip';
 import { RangeEditor } from './RangeEditor';
-import { clamp, timecode, type ClipCard, type Quotation, type VideoCard } from './model';
+import { clamp, timecode, type ClipCard, type Code, type Quotation, type VideoCard } from './model';
+import { CodeChips } from './Coding';
 
-export function Clip({ clip, video, quotation, url, urls, poster, active, pinned, busy, dockControls, onHover, onPin, onDrag, onRange, onEditStart, onCapture, onSegment, onJump, onDuplicate, onDelete, onPlayer, onCode, onStop, onRate }: {
-  clip: ClipCard; video: VideoCard; quotation: Quotation; url: string; urls: Record<string, string>; active: boolean; pinned: boolean; busy: boolean; dockControls: DockControls;
+export function Clip({ clip, video, quotation, codes, sharedViews, url, urls, poster, active, pinned, busy, dockControls, onHover, onPin, onDrag, onRange, onEditStart, onCapture, onSegment, onJump, onDuplicate, onDelete, onPlayer, onCode, onStop, onRate }: {
+  clip: ClipCard; video: VideoCard; quotation: Quotation; codes: Code[]; sharedViews: number; url: string; urls: Record<string, string>; active: boolean; pinned: boolean; busy: boolean; dockControls: DockControls;
   onHover: (hover: boolean) => void; onPin: () => void; onDrag: (e: PointerEvent) => void; onRange: (start: number, end: number) => void; onEditStart: () => void;
   onCapture: (time: number) => void; onSegment: (time: number) => void; onJump: (time: number) => void; onDuplicate: () => void; onDelete: () => void; onPlayer: (el: HTMLVideoElement | null) => void;
   onCode: () => void; onStop: () => void;
@@ -63,6 +64,7 @@ export function Clip({ clip, video, quotation, url, urls, poster, active, pinned
         onSeeked={() => setReady(true)}
         onTimeUpdate={() => { const el = element.current; if (el && el.currentTime >= bounds.current.end) el.currentTime = bounds.current.start; }} />}
       {!pinned && <span className="clip-hover-hint"><VolumeX size={11} /> hover to preview</span>}
+      {!!quotation.codeIds.length && <div className="media-codes" aria-label="Clip codes"><CodeChips quotation={quotation} codes={codes} /></div>}
     </div>
     <div className="clip-controls">
       <IconButton icon={playing ? Pause : Play} label={playing ? 'Pause clip' : 'Play clip'} aria-pressed={pinned} onClick={() => { if (!pinned) onPin(); else if (element.current?.paused) void element.current.play(); else element.current?.pause(); }} />
@@ -76,6 +78,6 @@ export function Clip({ clip, video, quotation, url, urls, poster, active, pinned
       onPointerDown={e => { if (e.button !== 0) return; e.preventDefault(); e.stopPropagation(); scrubbing.current = e.pointerId; e.currentTarget.setPointerCapture(e.pointerId); scrub(e); }} onPointerMove={e => { if (scrubbing.current === e.pointerId) scrub(e); }} onPointerUp={() => { scrubbing.current = null; }} onPointerCancel={() => { scrubbing.current = null; }}
       onKeyDown={e => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) { e.preventDefault(); seek(e.key === 'Home' ? quotation.start : e.key === 'End' ? quotation.end : time + (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 1 : .04)); } }}><span style={{ width: `${position * 100}%` }} /></div>
     <RangeEditor label="Clip" start={quotation.start} end={quotation.end} max={video.duration} frames={video.frameTimes} onChange={onRange} onEditStart={onEditStart} />
-    <div className="clip-source" title={video.name}>{video.name} · source time</div>
+    <div className="clip-source"><span title={video.name}>{video.name} · source time</span>{sharedViews > 1 && <span className="shared-views" title="Linked views share this segment's boundaries, codes and memo.">{sharedViews} linked views</span>}</div>
   </>;
 }

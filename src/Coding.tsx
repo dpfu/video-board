@@ -18,21 +18,24 @@ export function Coding({ board, target, draft, dockControls, onDrag, onClose, on
   onDraft: (draft: RangeDraft) => void; onSaveDraft: () => void; onCancelDraft: () => void; onSource: (id: string) => void;
 }) {
   const [search, setSearch] = useState(''), [newCode, setNewCode] = useState(''), [filter, setFilter] = useState<string | null>(null), [tab, setTab] = useState<'codes' | 'quotes' | 'sources'>('codes');
+  const [draftValid, setDraftValid] = useState(true);
   const selectedCode = board.codes.find(c => c.id === filter);
-  const query = search.toLocaleLowerCase();
-  const results = board.quotations.filter(q => (!filter || q.codeIds.includes(filter)) && (!query || [q.title, q.memo, board.videos.find(v => v.id === q.sourceId)?.name, ...q.codeIds.map(id => board.codes.find(c => c.id === id)?.name)].join(' ').toLocaleLowerCase().includes(query)));
+  const query = search.trim().toLocaleLowerCase();
+  const results = board.quotations.filter(q => (!filter || q.codeIds.includes(filter)) && (!query || [q.title, q.memo, board.videos.find(v => v.id === q.sourceId)?.name, ...q.codeIds.map(id => { const c = board.codes.find(c => c.id === id); return c ? `${c.name} ${c.definition}` : ''; })].join(' ').toLocaleLowerCase().includes(query)));
+  const canAssign = !!target && !draft;
   const source = board.videos.find(v => v.id === target?.sourceId);
   const draftSource = board.videos.find(v => v.id === draft?.sourceId);
   function createCode() { if (!newCode.trim()) return; onAddCode(newCode.trim()); setNewCode(''); }
   return <>
     <header className="card-header" onPointerDown={onDrag}><ModuleGrip onPeel={dockControls.onPeel} /><BookOpen size={12} /><span className="card-title">Codes & quotations</span><span className="control-spacer" /><UndockButton {...dockControls} /><IconButton icon={X} label="Close codes module" onClick={onClose} /></header>
     <div className="coding-body" onPointerDown={e => e.stopPropagation()} onWheel={e => e.stopPropagation()}>
-      {draft && draftSource && <section className="quotation-editor segment-editor"><div className="section-label"><Scissors size={11} /> New segment <IconButton icon={X} label="Cancel segment" onClick={onCancelDraft} /></div>
+      {draft && draftSource && <section className="quotation-editor segment-editor"><div className="section-label"><Scissors size={11} /> New segment · not saved <IconButton icon={X} label="Cancel segment" onClick={onCancelDraft} /></div>
         <div className="source-caption">{draftSource.name} · source time</div>
-        <RangeEditor label="Segment" start={draft.start} end={draft.end} min={draft.min} max={draft.max} frames={draftSource.frameTimes} onEditStart={() => {}} onChange={(start, end) => onDraft({ ...draft, start, end })} />
-        <button className="text-button primary-action" onClick={onSaveDraft}>Save free quotation</button>
+        <RangeEditor label="Segment" start={draft.start} end={draft.end} min={draft.min} max={draft.max} frames={draftSource.frameTimes} onEditStart={() => {}} onValidityChange={setDraftValid} onChange={(start, end) => onDraft({ ...draft, start, end })} />
+        <button className="text-button primary-action" disabled={!draftValid} onClick={onSaveDraft}>Save free quotation</button>
+        <p className="coding-hint">{draftValid ? 'Save this segment to assign codes or write a memo.' : 'Enter valid in and out times to save this segment.'}</p>
       </section>}
-      {target && <section className="quotation-editor" data-editing-quotation={target.id}>
+      {target && !draft && <section className="quotation-editor" data-editing-quotation={target.id}>
         <div className="section-label"><span>{target.kind === 'video' ? 'Whole video' : target.kind === 'frame' ? 'Still frame' : target.kind === 'region' ? 'Image region' : 'Video segment'}</span><span className="control-spacer" />{target.kind !== 'video' && <IconButton icon={X} label="Delete quotation" onClick={() => onDeleteQuotation(target)} />}</div>
         <div className="source-caption" title={source?.name}>{source?.name} · {target.kind === 'video' ? 'full duration' : target.kind === 'frame' || target.kind === 'region' ? timecode(target.start) : `${timecode(target.start)}–${timecode(target.end)}`}</div>
         <input key={`title-${target.id}`} className="quotation-title" aria-label="Quotation title" placeholder="Give this selection a title…" value={target.title} onFocus={onEditStart} onChange={e => onEditQuotation(target.id, { title: e.target.value })} />
@@ -43,13 +46,13 @@ export function Coding({ board, target, draft, dockControls, onDrag, onClose, on
       </section>}
       <div className="coding-tabs" role="tablist" aria-label="Analysis views">{(['codes', 'quotes', 'sources'] as const).map(t => <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>{t === 'quotes' ? 'Quotations' : t === 'codes' ? 'Codes' : 'Sources'}</button>)}</div>
       <label className="coding-search"><Search size={12} /><input type="search" aria-label="Search codes and quotations" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} /></label>
-      {tab === 'sources' ? <div className="source-list">{board.videos.map(v => <button key={v.id} className="retrieval-result" onClick={() => onSource(v.id)}><Film size={12} /><span>{v.name}<small>{timecode(v.duration)}{v.hidden ? ' · player hidden' : ''}</small></span></button>)}</div> : <>
+      {tab === 'sources' ? <div className="source-list">{board.videos.filter(v => v.name.toLocaleLowerCase().includes(query)).map(v => <button key={v.id} className="retrieval-result" onClick={() => onSource(v.id)}><Film size={12} /><span>{v.name}<small>{timecode(v.duration)}{v.hidden ? ' · player hidden' : ''}</small></span></button>)}</div> : <>
         {tab === 'codes' && <>
-          <form className="new-code" onSubmit={e => { e.preventDefault(); createCode(); }}><input aria-label="New code name" placeholder={target ? 'Create & assign a code…' : 'New code…'} value={newCode} onChange={e => setNewCode(e.target.value)} maxLength={200} /><IconButton icon={Plus} label="Create code" disabled={!newCode.trim()} onClick={createCode} /></form>
-          {!target && <p className="coding-hint">Select a video, clip, still or region to assign codes.</p>}
+          <form className="new-code" onSubmit={e => { e.preventDefault(); if (!draft) createCode(); }}><input aria-label="New code name" placeholder={canAssign ? 'Create or reuse & assign a code…' : 'New code…'} value={newCode} disabled={!!draft} onChange={e => setNewCode(e.target.value)} maxLength={200} /><IconButton icon={Plus} label="Create code" disabled={!!draft || !newCode.trim()} onClick={createCode} /></form>
+          {!target && !draft && <p className="coding-hint">Select a video, clip, still or region to assign codes.</p>}
           <div className="code-list">{board.codes.filter(c => `${c.name} ${c.definition}`.toLocaleLowerCase().includes(query)).map(code => <div key={code.id} className={`code-row ${filter === code.id ? 'is-active' : ''}`}>
-            <button className="code-assign" style={{ '--code-color': code.color } as React.CSSProperties} aria-label={`Assign ${code.name}`} aria-pressed={!!target?.codeIds.includes(code.id)} disabled={!target} onClick={() => onAssign(code.id)}><span>{target?.codeIds.includes(code.id) ? '✓' : '+'}</span></button>
-            <button className="code-retrieve" onClick={() => { setFilter(code.id); setTab('quotes'); }}><span>{code.name}</span><small>{board.quotations.filter(q => q.codeIds.includes(code.id)).length}</small></button>
+            <button className="code-assign" style={{ '--code-color': code.color } as React.CSSProperties} aria-label={`Assign ${code.name}`} aria-pressed={canAssign && target.codeIds.includes(code.id)} disabled={!canAssign} onClick={() => onAssign(code.id)}><span>{canAssign && target.codeIds.includes(code.id) ? '✓' : '+'}</span></button>
+            <button className="code-retrieve" onClick={() => { setFilter(code.id); setSearch(''); setTab('quotes'); }}><span>{code.name}</span><small>{board.quotations.filter(q => q.codeIds.includes(code.id)).length}</small></button>
           </div>)}</div>
         </>}
         {tab === 'quotes' && <>

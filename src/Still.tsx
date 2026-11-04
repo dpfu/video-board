@@ -7,11 +7,11 @@ import { Regions } from './Regions';
 import { CodeChips } from './Coding';
 import type { Code, Quotation, Rect } from './model';
 
-export function Still({ still, video, url, busy, onDrag, onTime, onJump, onDelete, dockControls, regions, codes, selectedRegion, drawing, onDraw, onSelectRegion, onCreateRegion, onChangeRegion, onEditStart, onDeleteRegion, onCode, onDuplicate, quotation }: {
+export function Still({ still, video, url, busy, onDrag, onTime, onJump, onDelete, dockControls, regions, codes, selectedRegion, drawing, onDraw, onSelectRegion, onCreateRegion, onChangeRegion, onEditStart, onDeleteRegion, onCode, onDuplicate, quotation, sharedViews }: {
   still: StillCard; video: VideoCard; url: string; busy: boolean; onDrag: (event: React.PointerEvent) => void;
   onTime: (time: number) => void; onJump: () => void; onDelete: () => void;
   dockControls: DockControls;
-  regions: Quotation[]; codes: Code[]; selectedRegion: string | null; drawing: boolean; quotation?: Quotation;
+  regions: Quotation[]; codes: Code[]; selectedRegion: string | null; drawing: boolean; quotation?: Quotation; sharedViews: number;
   onDraw: () => void; onSelectRegion: (id: string) => void; onCreateRegion: (rect: Rect) => void;
   onChangeRegion: (id: string, rect: Rect) => void; onEditStart: () => void; onDeleteRegion: (id: string) => void;
   onCode: () => void; onDuplicate: () => void;
@@ -39,7 +39,7 @@ export function Still({ still, video, url, busy, onDrag, onTime, onJump, onDelet
         onChange={event => { setDraft(event.target.value); setInvalid(false); }} onBlur={submit}
         onKeyDown={event => {
           if (event.key === 'Enter') event.currentTarget.blur();
-          if (event.key === 'Escape') { setDraft(timecode(still.time)); setInvalid(false); }
+          if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setDraft(timecode(still.time)); setInvalid(false); }
         }} />
       <span className="control-spacer" />
       <IconButton icon={ScanLine} label="Draw region" aria-pressed={drawing} onClick={onDraw} />
@@ -58,6 +58,6 @@ export function Still({ still, video, url, busy, onDrag, onTime, onJump, onDelet
       </div>
       {drawing && <span className="region-draw-hint">Drag a rectangle · Esc to finish</span>}
     </div>
-    <footer className="still-footer"><Link2 size={10} /><span title={video.name}>{video.name}</span><CodeChips quotation={quotation} codes={codes} />{busy && <span>Updating…</span>}</footer>
+    <footer className="still-footer"><Link2 size={10} /><span title={video.name}>{video.name}</span><CodeChips quotation={quotation} codes={codes} />{sharedViews > 1 && <span className="shared-views" title="Linked views share the frame, regions and coding. Capture another still for independent evidence.">{sharedViews} linked views</span>}{busy && <span>Updating…</span>}</footer>
   </>;
 }

@@ -2,19 +2,20 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import { BookOpen, Camera, Clapperboard, Film, Layers, Pause, Play, Repeat2, ScanLine, Scissors, X, Volume2, VolumeX, AudioLines } from 'lucide-react';
 import { IconButton } from './Icons';
 import { Timeline } from './Timeline';
-import { clamp, timecode, videoImageHeight, type TrackKind, type VideoCard } from './model';
+import { clamp, timecode, videoImageHeight, type Code, type Quotation, type TrackKind, type VideoCard } from './model';
+import { CodeChips } from './Coding';
 import { ModuleGrip, UndockButton, type DockControls } from './ModuleGrip';
 import { publishTime } from './transport';
 
 export type PlayerHandle = { seek: (time: number) => void; element: () => HTMLVideoElement | null; time: () => number };
 
 export const VideoPlayer = forwardRef<PlayerHandle, {
-  video: VideoCard; url: string; urls: Record<string, string>; stillTimes: number[]; busy: boolean;
+  video: VideoCard; quotation?: Quotation; codes: Code[]; url: string; urls: Record<string, string>; stillTimes: number[]; busy: boolean;
   onPatch: (patch: Partial<VideoCard>) => void; onCapture: (time: number) => void; onDelete: () => void;
   onError: (message: string) => void; onDrag: (event: React.PointerEvent) => void;
   dockControls: DockControls; onAddTrack: (kind: TrackKind) => void;
   onClip: (time: number) => void; onAllShots: () => void; onSegment: (time: number) => void; onCode: () => void;
-}>(function VideoPlayer({ video, url, urls, stillTimes, busy, onPatch, onCapture, onDelete, onError, onDrag, dockControls, onAddTrack, onClip, onAllShots, onSegment, onCode }, ref) {
+}>(function VideoPlayer({ video, quotation, codes, url, urls, stillTimes, busy, onPatch, onCapture, onDelete, onError, onDrag, dockControls, onAddTrack, onClip, onAllShots, onSegment, onCode }, ref) {
   const element = useRef<HTMLVideoElement>(null);
   const [time, setTime] = useState(video.time);
   const [playing, setPlaying] = useState(false);
@@ -88,6 +89,7 @@ export const VideoPlayer = forwardRef<PlayerHandle, {
         onSeeked={() => { if (element.current && pendingSeek.current === null) { desiredTime.current = element.current.currentTime; setTime(element.current.currentTime); publishTime(video.id, element.current.currentTime); } }}
         onError={() => onError(`The browser could not play ${video.name}. Try an H.264 MP4 or WebM file.`)} />
       {!playing && <button type="button" className="video-play" aria-label={`Play ${video.name}`} onClick={() => void togglePlay()}><Play size={25} fill="currentColor" /></button>}
+      {!!quotation?.codeIds.length && <div className="media-codes" aria-label="Whole video codes"><CodeChips quotation={quotation} codes={codes} /></div>}
     </div>
     <div className="player-controls">
       <IconButton icon={playing ? Pause : Play} label={playing ? 'Pause' : 'Play'} onClick={() => void togglePlay()} />

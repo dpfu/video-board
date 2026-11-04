@@ -48,7 +48,7 @@ on **4193** and use fresh contexts, leaving the working board on **5193** alone.
   coded regions, parent trimming, shared media/quotations, CSV and v2 migration;
   deep mixed dock assemblies and viewport/zoom/overscan selection without edits
   to the underlying evidence.
-- **10 Chromium workflows:** real-media import and analysis; synchronized resized
+- **15 Chromium workflows:** real-media import and analysis; synchronized resized
   scrubbers and exact linked-still recapture; magnetic group interactions, Undo
   and reload; ZIP roundtrip, rejected incomplete backups and offscreen PNG export;
   known-cut detection, cached threshold adjustment, shot seeking and older boards;
@@ -57,7 +57,10 @@ on **4193** and use fresh contexts, leaving the working board on **5193** alone.
   code renaming, CSV and v3 ZIP validation/reopen; retiming, moving/resizing and
   duplicating coded regions; interrupting settling motion and reduced motion;
   offscreen culling while retaining pinned playback, speed, codes/memos and
-  full-board PNG/ZIP export, restore and reload.
+  full-board PNG/ZIP export, restore and reload; stable region/range coding
+  through transport and shared-view retiming, pending/invalid segment protection,
+  case-insensitive code reuse, definition retrieval, action-button keyboard Undo,
+  and covered/offscreen evidence/panel reveal.
 
 The versioned [synthetic fixture](../e2e/fixtures/README.md) contains no private media.
 Browser workflows use the actual decoder, workers and IndexedDB. The unit storage
@@ -65,7 +68,18 @@ checks use `fake-indexeddb`. Disposable reports, downloads and failure traces go
 under ignored `tmp/playwright/`; open the HTML report with
 `npx playwright show-report tmp/playwright/report`.
 
-Verified on **bugglzwerg, 4 November 2026** after the performance pass:
+Verified on **bugglzwerg, 5 November 2026** after the coding iteration:
+`npm run check` passed all **45 checks** and the production build; the browser
+portion took about **49 seconds**. A separate generated-media demo on 4393
+verified overlapping coding, native memo Undo, trimming/deleting a coded parent
+while retaining its child, visible PNG code labels and exact fresh-session ZIP
+restore. Its CSV matched all 10 quotations/memos/assignments, and the two original
+videos were stored once each with identical bytes. Demo artifacts are ignored
+under `tmp/coding-pass-2026-11-05/`; research media and the working browser profile
+were not used. See the [spec's coding iteration](../SPEC.md#coding-iteration--5-november-2026)
+for implemented changes and remaining proposals.
+
+Previously verified on **bugglzwerg, 4 November 2026** after the performance pass:
 `npm run check` passed all **40 checks** and the production build. The browser
 portion took about **37 seconds**. The preceding analysis-spec/motion pass
 passed 36 checks in about 34 seconds; its visual inspection covered the

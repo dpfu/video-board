@@ -1,22 +1,26 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { clamp, parseTimecode, timecode } from './model';
 
-function TimeField({ label, value, onValue }: { label: string; value: number; onValue: (value: number) => void }) {
+function TimeField({ label, value, onValue, onValidity }: { label: string; value: number; onValue: (value: number) => void; onValidity: (valid: boolean) => void }) {
   const [draft, setDraft] = useState(timecode(value)), [invalid, setInvalid] = useState(false);
-  useEffect(() => { setDraft(timecode(value)); setInvalid(false); }, [value]);
+  useEffect(() => { setDraft(timecode(value)); setInvalid(false); onValidity(true); }, [value]);
   return <label><span>{label}</span><input aria-label={label} className="range-time" value={draft} aria-invalid={invalid} spellCheck={false}
-    onChange={e => { setDraft(e.target.value); setInvalid(false); }} onBlur={() => {
+    onChange={e => { setDraft(e.target.value); setInvalid(false); onValidity(Number.isFinite(parseTimecode(e.target.value))); }} onBlur={() => {
       const next = parseTimecode(draft);
-      if (!Number.isFinite(next)) { setInvalid(true); return; }
+      if (!Number.isFinite(next)) { setInvalid(true); onValidity(false); return; }
+      onValidity(true);
       onValue(next); setDraft(timecode(value));
-    }} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setDraft(timecode(value)); setInvalid(false); } }} /></label>;
+    }} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setDraft(timecode(value)); setInvalid(false); onValidity(true); } }} /></label>;
 }
 
-export function RangeEditor({ start, end, min = 0, max, frames, onChange, onEditStart, label = 'Range' }: {
+export function RangeEditor({ start, end, min = 0, max, frames, onChange, onEditStart, onValidityChange, label = 'Range' }: {
   start: number; end: number; min?: number; max: number; frames: number[];
   onChange: (start: number, end: number) => void; onEditStart: () => void; label?: string;
+  onValidityChange?: (valid: boolean) => void;
 }) {
   const active = useRef<{ pointer: number; edge: 'start' | 'end' } | null>(null);
+  const [validStart, setValidStart] = useState(true), [validEnd, setValidEnd] = useState(true);
+  useEffect(() => { onValidityChange?.(validStart && validEnd); }, [validStart, validEnd, onValidityChange]);
   const gap = Math.min(.001, (max - min) / 2), span = max - min || 1;
   const snap = (value: number, edge: 'start' | 'end') => {
     const candidates = frames.filter(t => t >= min && t <= max && (edge === 'start' ? t < end - .000001 : t > start + .000001));
@@ -40,7 +44,7 @@ export function RangeEditor({ start, end, min = 0, max, frames, onChange, onEdit
     update(edge, next);
   };
   return <div className="range-editor" onPointerDown={e => e.stopPropagation()}>
-    <div className="range-fields"><TimeField label={`${label} in`} value={start} onValue={value => { onEditStart(); update('start', snap(value, 'start')); }} /><span className="range-duration">{timecode(end - start)} long</span><TimeField label={`${label} out`} value={end} onValue={value => { onEditStart(); update('end', snap(value, 'end')); }} /></div>
+    <div className="range-fields"><TimeField label={`${label} in`} value={start} onValidity={setValidStart} onValue={value => { onEditStart(); update('start', snap(value, 'start')); }} /><span className="range-duration">{timecode(end - start)} long</span><TimeField label={`${label} out`} value={end} onValidity={setValidEnd} onValue={value => { onEditStart(); update('end', snap(value, 'end')); }} /></div>
     <div className="range-track" onPointerDown={e => {
       if (e.button !== 0) return;
       e.preventDefault(); e.stopPropagation();

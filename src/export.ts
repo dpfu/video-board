@@ -76,13 +76,14 @@ export async function exportBoard(board: Board, assets: Map<string, Blob>, playe
         const r = region.rect!, color = board.codes.find(c => region.codeIds.includes(c.id))?.color || '#b8cde5';
         const rx = card.x + (card.width - w) / 2 + r.x * w, ry = card.y + HEADER + (imageHeight - h) / 2 + r.y * h;
         ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.strokeRect(rx, ry, r.width * w, r.height * h);
-        const label = region.title || region.codeIds.map(id => board.codes.find(c => c.id === id)?.name).filter(Boolean).join(', ') || 'Region';
+        const regionCodes = region.codeIds.map(id => board.codes.find(c => c.id === id)?.name).filter(Boolean).join(', ');
+        const label = `${region.title || 'Region'}${regionCodes ? ` · ${regionCodes}` : ''}`;
         ctx.font = '8px system-ui'; const labelWidth = Math.min(w, ctx.measureText(label).width + 6);
         ctx.fillStyle = color; ctx.fillRect(rx, Math.max(card.y + HEADER, ry - 13), labelWidth, 12); ctx.fillStyle = '#202832'; ctx.fillText(label, rx + 3, Math.max(card.y + HEADER + 9, ry - 4), labelWidth - 6);
       }
       ctx.fillStyle = '#b4bdcb'; ctx.font = '10px system-ui';
       const codes = quote?.codeIds.map(id => board.codes.find(c => c.id === id)?.name).filter(Boolean).join(', ');
-      ctx.fillText(clip ? `${timecode(quote!.start)}–${timecode(quote!.end)} · ${source.name}` : video ? `${timecode(time)}${codes ? ` · ${codes}` : ''}` : `${source.name}${codes ? ` · ${codes}` : ''}`, card.x + 9, card.y + HEADER + imageHeight + (video ? 23 : 14), card.width - 18);
+      ctx.fillText(clip ? `${timecode(quote!.start)}–${timecode(quote!.end)} · ${source.name}${codes ? ` · ${codes}` : ''}` : video ? `${timecode(time)}${codes ? ` · ${codes}` : ''}` : `${source.name}${codes ? ` · ${codes}` : ''}`, card.x + 9, card.y + HEADER + imageHeight + (video ? 23 : 14), card.width - 18);
       if (video) {
         const y = card.y + card.height - 11;
         ctx.fillStyle = '#22252a'; ctx.fillRect(card.x + 8, y, card.width - 16, 5);

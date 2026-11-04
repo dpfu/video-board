@@ -11,8 +11,9 @@ them at Daniel's working board on port 5193 or use private research media.
 Keep Daniel's product discussion and decisions in `SPEC.md` as the single working
 spec. Update it when the discussion changes an agreement, preserve superseded
 decisions briefly with their rationale, and distinguish implemented behavior,
-accepted direction and proposals. README holds run/verification details; link
-the spec rather than starting parallel plan files. In particular, coded still
+accepted direction and proposals. Keep README minimal; detailed run/verification,
+performance and recovery evidence lives in `docs/DEVELOPMENT.md`. Link the spec
+rather than starting parallel plan files. In particular, coded still
 regions remain retimeable with geometry fixed relative to the image; the earlier
 freeze-after-coding suggestion was rejected by Daniel.
 Region selection starts with manual rectangles; model segmentation is deferred.
@@ -25,9 +26,11 @@ Keep disposable QA clips, screenshots and other intermediates in ignored `tmp/`.
 The generated, nonprivate regression fixture in `e2e/fixtures/` is versioned;
 it must stay reproducible without private media or external downloads.
 
-No deployment or shared remote exists yet. Default future internal/private
-hosting is Uni-GitLab; do not create or publish a remote without task context
-supporting that step. Keep the first prototype's implementation choices simple;
+Daniel authorized a public GitHub repository and GitHub Pages on 4 November
+2026. The publication target is `dpfu/video-board`; use it as the single `origin`.
+GitHub Pages serves the tested `dist/` from `main`; PR checks must not deploy.
+The first published version is `0.0.1`, tagged `v0.0.1`, explicitly experimental.
+Keep the first prototype's implementation choices simple;
 Rust/Wasm remains a future option. Daniel chose a TypeScript port of FFmpeg's
 scdet on 4 November 2026. Keep the port in `src/scdet.ts` under its upstream
 LGPL-2.1-or-later terms, with the pinned revision, notices, license text and

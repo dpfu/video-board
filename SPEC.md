@@ -3,8 +3,9 @@
 Updated **4 November 2026**, from the discussion with Daniel. This is the single
 home for product decisions, proposed behavior and open questions. Update it as
 the discussion develops; preserve corrections and their rationale. The
-[README](README.md) records how to run the app, implemented behavior, verification,
-port provenance and recovery instructions. Use the status labels below when
+[README](README.md) is the minimal public entrypoint; the
+[development notes](docs/DEVELOPMENT.md) preserve implemented behavior,
+verification, port provenance and recovery instructions. Use the status labels below when
 choosing the next small iteration.
 
 ## Purpose and constraints
@@ -22,28 +23,30 @@ Keep it compact, responsive and methodologically useful: **select → code → m
 - Preserve independent source references through board movement, resizing,
   docking, filtering, reload and project backup. Multiple views can reuse one
   quotation and one media asset.
-- No account, cloud processing or research-media upload is needed. Source code
-  remains in this local checkout outside UNIverse; the
-  [dossier register](</Users/daniel/UNIverse/41 WIP/41.018 klagenfurt vibe coding/experiments/README.md>)
-  points here. No deployment or shared remote has been created.
+- No account, cloud processing or research-media upload is needed. Daniel
+  authorized the public [GitHub repository](https://github.com/dpfu/video-board)
+  and [GitHub Pages](https://dpfu.github.io/video-board/) on 4 November 2026.
+  The first application release is **0.0.1** / **v0.0.1**, explicitly experimental;
+  the project schema remains v3. Source code stays outside UNIverse; the local
+  dossier pointer remains in the development notes.
 - Keep scope small. The original no-tests brief was superseded by Daniel's
-  request for a focused suite. See [checks](README.md#checks); browser checks use
+  request for a focused suite. See [checks](docs/DEVELOPMENT.md#checks); browser checks use
   disposable contexts on 4193, separate from the working board on 5193.
 
 ## Current state
 
 | Area | Status |
 | --- | --- |
-| Local video import, source players, linked stills, frame adjustment | Implemented; see README and `src/VideoPlayer.tsx`, `src/Still.tsx`. |
+| Local video import, source players, linked stills, frame adjustment | Implemented; see development notes and `src/VideoPlayer.tsx`, `src/Still.tsx`. |
 | Compact grey modules, docking/undocking, group movement, independent resizing | Implemented. |
 | Microanimations and tactile interaction feedback, with tldraw as reference | Implemented: pickup/drop, edge previews, settling, linked creation/reveal cues, controls/chips/popovers and reduced motion. |
 | Synchronized Frames/Audio scrubbers, waveform and thumbnail analysis | Implemented. |
-| TypeScript port of FFmpeg scdet, cached threshold, dockable Cuts module | Implemented and compared with native references; see README and `src/scdet.ts`. |
+| TypeScript port of FFmpeg scdet, cached threshold, dockable Cuts module | Implemented and compared with native references; see development notes and `src/scdet.ts`. |
 | PNG board export, local persistence, atomic ZIP backup/restore | Implemented. |
 | Linked clip cards with muted hover preview and editable ranges | Implemented: shot default, independent scrub/playback, shared source data, duplicate views and explicit all-shots action. |
 | Free quotations, whole-video/clip/subsegment coding, region coding, memos and retrieval | Implemented: flat codes, compact assignment popovers, dockable Codes/Quotations/Sources module, ZIP restore and CSV export. |
 | Still-region selection | Implemented: manual, movable/resizable rectangles; retiming preserves geometry, identity, codes and memo across views. |
-| Board performance | Implemented: cached dock index/module rendering, viewport culling and bounded covers. Measured 31–32× faster pan/drag elapsed time on a 240-clip synthetic board; full protocol and smaller-board limits in README. |
+| Board performance | Implemented: cached dock index/module rendering, viewport culling and bounded covers. Measured 31–32× faster pan/drag elapsed time on a 240-clip synthetic board; full protocol and smaller-board limits in development notes. |
 | Browser segmentation for proposing still regions | Deferred by Daniel for the first version; research retained below. |
 
 ## Interface and interaction
@@ -71,7 +74,7 @@ Preserve this behavior for future clip and coding modules.
 Daniel requested a **10× improvement** after the spec implementation. Measure
 against the preceding production build with repeatable real-media workloads;
 do not treat a board-interaction result as a promise about decoding or analysis.
-The [README](README.md#board-performance--4-november-2026) preserves the benchmark
+The [development notes](docs/DEVELOPMENT.md#board-performance--4-november-2026) preserve the benchmark
 protocol and measured results: 31–32× faster elapsed time at 240 clips, with
 smaller elapsed gains but more than 10× less main-thread task time at 120 clips.
 
@@ -258,7 +261,7 @@ Daniel chose a **TypeScript port of FFmpeg scdet** on 4 November 2026 after the
 discussion of a custom adaptive detector and FFmpeg/Wasm/native alternatives.
 The implemented port takes priority over the earlier adaptive-detector proposal.
 
-Implemented scope and evidence are in the [README](README.md#current-local-shot-detection--4-november-2026).
+Implemented scope and evidence are in the [development notes](docs/DEVELOPMENT.md#current-local-shot-detection--4-november-2026).
 The numeric core is pinned to FFmpeg n8.1.2 and keeps its LGPL terms. Browser
 decoding stays with Mediabunny/WebCodecs. This choice adds cut scoring, not codec
 coverage. Sensitivity uses cached per-frame scores; new detection settings must
@@ -359,7 +362,7 @@ loop is useful.
   modules with group movement, detaching and independent resizing. This
   superseded the initial green Folder Sort aesthetic.
 - Daniel requested a small suite and test run, superseding the original no-tests
-  prototype instruction. The README preserves the initial and expanded results.
+  prototype instruction. The development notes preserve the initial and expanded results.
 - Linked clips were discussed as source-referencing, muted hover-playing cards,
   with no copied video data. Detected shots became the preferred default extent.
 - Compared local frame comparison, FFmpeg and learned detection. After also
@@ -381,9 +384,16 @@ loop is useful.
 - Daniel then requested implementation of the complete agreed spec in goal mode.
   The three slices and motion pass are implemented; segmentation and the other
   explicitly deferred features remain outside this prototype. Current checks,
-  controls, storage migration and practical limits are recorded in the README.
+  controls, storage migration and practical limits are recorded in the development notes.
 - Daniel requested a 10× performance improvement. Repeated dock-graph work and
   offscreen rendering were the measured bottlenecks. Cached graph/module work,
   view/connector culling and smaller repeated rendering work are implemented;
-  the README records before/after results and their workload limits. Browser
+  the development notes record before/after results and their workload limits. Browser
   checks cover offscreen playback, evidence and full-board export/restore.
+- Daniel requested a test suite, minimal public README and a first semantic
+  version, then explicitly chose a public GitHub repository and GitHub Pages.
+  Keep **0.0.1** visibly experimental: a possible future video-analysis workbench.
+  The existing 30 unit/storage checks and 10 real-media browser workflows form
+  the release suite; GitHub Actions runs them before deploying the tested build
+  from `main`. Detailed implementation/evidence/recovery notes moved intact from
+  the growing README to `docs/DEVELOPMENT.md`; this spec remains the single plan.

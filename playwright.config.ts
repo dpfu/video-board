@@ -1,7 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
 // A separate origin and disposable contexts protect the working board on 5193.
-const baseURL = 'http://127.0.0.1:4193';
+// Exercise the same repository subpath used by GitHub Pages, including workers.
+const baseURL = 'http://127.0.0.1:4193/video-board/';
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
@@ -20,7 +21,7 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 1000 } } }],
   webServer: {
-    command: 'node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4193 --strictPort',
+    command: 'node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4193 --strictPort --base /video-board/',
     url: baseURL,
     reuseExistingServer: false,
     timeout: 15_000,

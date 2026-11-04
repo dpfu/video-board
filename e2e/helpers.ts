@@ -49,7 +49,7 @@ export async function assetHash(page: Page, key: string) {
 }
 
 export async function openVideo(page: Page) {
-  await page.goto('/');
+  await page.goto('./');
   await expect(page.getByRole('button', { name: 'Add videos', exact: true })).toBeEnabled();
   await page.locator('input[type=file][accept^="video/"]').setInputFiles(fixturePath);
   await expect(page.locator('.video-card')).toHaveCount(1);

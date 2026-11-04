@@ -7,7 +7,7 @@ const sceneVideo = fileURLToPath(new URL('./fixtures/scenes.webm', import.meta.u
 
 test('detects real cuts, seeks by shot, changes sensitivity without decoding, and retains scores in ZIP/reload', async ({ page }, testInfo) => {
   let workers = 0; page.on('worker', () => workers++);
-  await page.goto('/');
+  await page.goto('./');
   await expect(page.getByRole('button', { name: 'Add videos', exact: true })).toBeEnabled();
   await page.locator('input[type=file][accept^="video/"]').setInputFiles(sceneVideo);
   await expect.poll(async () => (await savedBoard(page))?.videos[0]?.analysis).toBe('ready');

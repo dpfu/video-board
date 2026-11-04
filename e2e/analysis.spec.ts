@@ -4,7 +4,7 @@ import JSZip from 'jszip';
 import { test, expect, assetHash, box, dragBy, openVideo, savedBoard, scrub, waitSaved } from './helpers';
 
 test('shot clips preview silently and independently; duplicate views share coding and nested ranges survive trimming', async ({ page }, testInfo) => {
-  await page.goto('/');
+  await page.goto('./');
   await expect(page.getByRole('button', { name: 'Add videos', exact: true })).toBeEnabled();
   await page.locator('input[type=file][accept^="video/"]').setInputFiles(fileURLToPath(new URL('./fixtures/scenes.webm', import.meta.url)));
   await expect.poll(async () => (await savedBoard(page))?.videos[0]?.analysis).toBe('ready');

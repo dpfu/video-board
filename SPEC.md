@@ -36,6 +36,7 @@ Keep it compact, responsive and methodologically useful: **select → code → m
 | --- | --- |
 | Local video import, source players, linked stills, frame adjustment | Implemented; see README and `src/VideoPlayer.tsx`, `src/Still.tsx`. |
 | Compact grey modules, docking/undocking, group movement, independent resizing | Implemented. |
+| Microanimations and tactile interaction feedback, with tldraw as reference | Agreed direction; motion details proposed below, not yet implemented as a coherent pass. |
 | Synchronized Frames/Audio scrubbers, waveform and thumbnail analysis | Implemented. |
 | TypeScript port of FFmpeg scdet, cached threshold, dockable Cuts module | Implemented and compared with native references; see README and `src/scdet.ts`. |
 | PNG board export, local persistence, atomic ZIP backup/restore | Implemented. |
@@ -63,6 +64,39 @@ header drag moves the docked assembly; the grip or Alt-drag releases one module;
 Shift suppresses magnets. Detached modules retain their source. Resizing preserves
 neighbours' independent dimensions and moves them with their attached edges.
 Preserve this behavior for future clip and coding modules.
+
+### Microanimations and tactile feedback
+
+**Agreed direction:** use **tldraw** as the reference for fluid, direct board
+interaction. Small animations should make picking up, connecting and editing
+objects feel tangible while preserving the compact grey interface. Reference:
+[snapping feedback](https://tldraw.dev/sdk-features/snapping) and
+[animation and reduced motion](https://tldraw.dev/sdk-features/animation).
+
+Proposed first pass, to tune together in the browser:
+
+- **Pick up / put down:** a small shadow and outline change acknowledge grabbing
+  a module or assembly; release settles it back into the board.
+- **Dock / undock:** show the candidate edge and attachment before release. A
+  short settling motion confirms docking; a seam/outline change acknowledges
+  detaching. Keep the existing gesture and modifier behavior.
+- **Create a linked object:** a new still or clip appears with a quick fade and
+  small settling movement. Briefly highlight its source and the new view so the
+  relationship is easy to follow.
+- **Hover, focus and selection:** controls and handles fade in quickly, with clear
+  pressed/selected states. Keyboard focus and touch expose the same actions.
+- **Scrub, trim and mark regions:** playheads, timecodes, handles and rectangles
+  follow input immediately. Keep the last decoded frame visible until the new
+  one is ready; cancel stale requests. Motion must preserve selection accuracy.
+- **Code and retrieve:** a code chip's arrival acknowledges assignment; revealing
+  a quotation briefly highlights the relevant card/region and source context.
+
+Initial timing proposal: roughly **100–150 ms** for control feedback and
+**150–220 ms** for settling/appearance, with restrained ease-out. Dragging and
+resizing stay attached to the pointer; decorative motion is interruptible by
+the next gesture. Respect `prefers-reduced-motion` with immediate placement and
+clear static feedback. Keep animation state transient, separate from saved
+geometry and exports, and keep playback/board gestures responsive during motion.
 
 ## Sources, quotations, codes and views
 
@@ -256,6 +290,10 @@ dependencies or promised quality upgrades.
 3. Extend ZIP and CSV roundtrips for the actual analysis data, including duplicate
    views, overlapping ranges and code renaming. Keep context links usable.
 
+Include microanimation feedback in each interaction slice. Review rapid repeated
+drag/dock/undock gestures, precise scrubbing and region edits, keyboard/touch
+access, and reduced motion; interrupting an animation must leave correct geometry.
+
 Segmentation is deferred from this sequence. If revisited as a separate small
 experiment, check local inference, bounded memory, cancellation on retiming,
 saved masks independent of model availability, and responsive board gestures.
@@ -293,3 +331,6 @@ loop is useful.
 - Daniel then chose simple manual regions for the first version: draw, move and
   resize a rectangle, keeping the agreed retiming behavior. Browser segmentation
   research is retained as a deferred option rather than a current milestone.
+- Daniel requested polished microanimations with tldraw as the interaction
+  reference. Motion should communicate manipulation and relationships; concrete
+  timings and effects remain proposals to tune in the prototype.

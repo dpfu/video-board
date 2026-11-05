@@ -36,6 +36,11 @@ Keep it compact, responsive and methodologically useful: **select → code → m
 
 ## Current state
 
+Current release: **0.0.2** / **v0.0.2**, still experimental. It packages the
+5 November coding and code-quality improvements below; see the
+[changelog](CHANGELOG.md). Project schema v3 and shared original video data are
+unchanged.
+
 | Area | Status |
 | --- | --- |
 | Local video import, source players, linked stills, frame adjustment | Implemented; see development notes and `src/VideoPlayer.tsx`, `src/Still.tsx`. |

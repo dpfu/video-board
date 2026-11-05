@@ -33,7 +33,7 @@ prototype's manual verification.
 
 ```sh
 npm run test:e2e:install # Chromium setup, once after npm ci on a new machine
-npm run check           # unit/storage tests, TypeScript build, browser workflows
+npm run check           # formatting, unit/storage tests, build, browser workflows
 ```
 
 For a shorter iteration, use `npm test` or `npm run test:watch`; `npm run test:e2e`
@@ -484,6 +484,11 @@ destination. Disposable QA media, downloads and screenshots belong in ignored
 deliberately. Research media stays in browser storage and project backups.
 
 ## Experimental release and CI
+
+The current application release is **0.0.2**, tagged **v0.0.2**, also an
+experimental GitHub prerelease. The [changelog](../CHANGELOG.md) records the coding
+and reliability changes since 0.0.1. Its release checks cover formatting, the
+production build, **53 Vitest checks and 18 Chromium workflows**.
 
 The first published application version is **0.0.1**, tagged **v0.0.1** and
 marked as an experimental GitHub prerelease. Version numbers describe the app;

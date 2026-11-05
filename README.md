@@ -4,7 +4,8 @@ An early experimental build of what could become a **local-first workbench for
 qualitative video analysis**.
 
 [Try it on GitHub Pages](https://dpfu.github.io/video-board/)
-· [Experimental v0.0.1](https://github.com/dpfu/video-board/releases/tag/v0.0.1)
+· [Experimental v0.0.2](https://github.com/dpfu/video-board/releases/tag/v0.0.2)
+· [Changelog](CHANGELOG.md)
 
 Arrange videos, clips and linked stills on a spatial board. Scrub synchronized
 thumbnail, audio and shot-detection tracks; mark segments and rectangular image
@@ -31,10 +32,10 @@ local and hosted versions.
 
 ```sh
 npm run test:e2e:install # Install Chromium once
-npm run check           # Unit/storage tests, TypeScript build, browser tests
+npm run check           # Formatting, unit/storage tests, build, browser tests
 ```
 
-The suite has **30 Vitest checks and 10 Playwright workflows**, using generated
+The suite has **53 Vitest checks and 18 Playwright workflows**, using generated
 media and disposable browser storage. GitHub Actions runs it on pushes and pull
 requests; passing builds of `main` deploy to Pages. `npm run benchmark` measures
 board interactions separately.

@@ -10,5 +10,10 @@ export function download(blob: Blob, filename: string) {
 }
 
 export function safeFilename(name: string) {
-  return name.trim().replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'video-board';
+  return (
+    name
+      .trim()
+      .replace(/[^\w.-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'video-board'
+  );
 }

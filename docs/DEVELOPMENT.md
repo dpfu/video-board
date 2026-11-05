@@ -40,15 +40,18 @@ For a shorter iteration, use `npm test` or `npm run test:watch`; `npm run test:e
 builds and runs just the browser workflows. Browser tests start a separate server
 on **4193** and use fresh contexts, leaving the working board on **5193** alone.
 
-- **30 Vitest checks:** group movement, detaching, independent resizing, docking
+- **53 Vitest checks:** group movement, detaching, independent resizing, docking
   on four sides and at different zoom levels, legacy v1 migration, persistence
   and atomic rollback after a simulated storage failure; native FFmpeg score
   parity on 8/10-bit sequences, reusable buffers, geometry changes, 16-bit
   normalization, exact shot boundaries and browser luma preprocessing; retiming
   coded regions, parent trimming, shared media/quotations, CSV and v2 migration;
   deep mixed dock assemblies and viewport/zoom/overscan selection without edits
-  to the underlying evidence.
-- **15 Chromium workflows:** real-media import and analysis; synchronized resized
+  to the underlying evidence; immutable Codes panel layout, typed archive shapes,
+  byte-identical ZIP roundtrips without IndexedDB, shared frame/asset consistency,
+  12,000-deep quotation chains/cycle rejection, worker construction/posting/error/
+  progress/abort cleanup and native/fallback playback-clock disposal.
+- **18 Chromium workflows:** real-media import and analysis; synchronized resized
   scrubbers and exact linked-still recapture; magnetic group interactions, Undo
   and reload; ZIP roundtrip, rejected incomplete backups and offscreen PNG export;
   known-cut detection, cached threshold adjustment, shot seeking and older boards;
@@ -60,7 +63,8 @@ on **4193** and use fresh contexts, leaving the working board on **5193** alone.
   full-board PNG/ZIP export, restore and reload; stable region/range coding
   through transport and shared-view retiming, pending/invalid segment protection,
   case-insensitive code reuse, definition retrieval, action-button keyboard Undo,
-  and covered/offscreen evidence/panel reveal.
+  and covered/offscreen evidence/panel reveal; hidden-source clock reset after
+  restore, unrelated pointer-event isolation, and editing after a corrupt ZIP.
 
 The versioned [synthetic fixture](../e2e/fixtures/README.md) contains no private media.
 Browser workflows use the actual decoder, workers and IndexedDB. The unit storage
@@ -70,7 +74,12 @@ under ignored `tmp/playwright/`; open the HTML report with
 The development watcher excludes `tmp/`: generating HTML reports/traces there
 must not reload an active demo or discard its transient selection/draft.
 
-Verified on **bugglzwerg, 5 November 2026** after the coding iteration:
+Verified on **bugglzwerg, 5 November 2026** after the code quality pass:
+`npm run check` passed formatting, **71 checks** and the production build.
+The browser portion took about 54 seconds. See the quality section below for
+the substantive refactoring and fixes; all earlier evidence remains historical.
+
+Previously verified on **bugglzwerg, 5 November 2026** after the coding iteration:
 `npm run check` passed all **45 checks** and the production build; the browser
 portion took about **49 seconds**. A separate generated-media demo on 4393
 verified overlapping coding, native memo Undo, trimming/deleting a coded parent
@@ -92,6 +101,44 @@ pre-detector suite passed 18 checks in about 11 seconds after correcting a runne
 viewport mismatch.
 Automated coverage currently targets Chromium with VP9/Opus, not a codec/browser
 compatibility matrix.
+
+## Code quality · 5 November 2026
+
+`npm run format` formats source, CSS, tests and build scripts with pinned Prettier;
+`npm run format:check` is part of `npm run check` and CI. Markdown, generated
+fixtures, lockfiles and the pinned LGPL port are excluded deliberately. This
+keeps authored project history and native-reference provenance intact.
+
+The review covered application components, model/layout, analysis/decoding,
+persistence/archives, export, tests, fixture/benchmark scripts and build/CI.
+The substantive changes are small boundaries rather than a new framework:
+
+- `validation.ts` checks untrusted ZIP data before migration/storage replacement,
+  with explicit shape guards, indexed links and iterative cycle detection.
+  `archive.ts` owns only ZIP/Blob IO and clear parse errors. Asset keys live in
+  the pure model, so archive tests need neither IndexedDB nor a FileReader mock.
+- Layout boxes are copies for every module kind, including Codes panels. A
+  frozen-snapshot regression reproduces the previous mutation that broke Undo.
+- Media requests/replies carry explicit task tags. Each job releases its worker
+  and AbortSignal listener on success, decoding/transport errors, failed posting
+  and cancellation. Source and clip players share one disposable frame-clock
+  implementation; seek RAF state is reset on cleanup.
+- Opening a project resets the separate playback clock, including hidden source
+  players. File operations hold the board inert and block global editing keys;
+  asynchronous captures/save errors recheck the current generation/snapshot.
+  Gesture variants encode their required fields; secondary pointer release or
+  cancellation cannot finish the current gesture.
+
+Vitest **5.0.3** is a focused development-dependency patch for the upstream
+[manual-mock registration](https://github.com/vitest-dev/vitest/security/advisories/GHSA-qxg6-89mg-rqv8)
+and [redirect allowlist](https://github.com/vitest-dev/vitest/security/advisories/GHSA-xp26-3454-mjgp)
+advisories. `npm audit` reports zero known vulnerabilities after the patch.
+Production dependencies, schema v3 and the FFmpeg source/license files are
+unchanged. Chromium coverage is not a general browser/codec compatibility claim.
+The earlier generated H.264/AAC + silent portrait coding demo restored exactly
+in a separate production-preview context, retaining all 10 quotations and 3
+codes. Its appearance and PNG export were checked with no console/runtime
+errors. Local QA evidence is ignored under `tmp/code-quality-2026-11-05/`.
 
 ## Board performance · 4 November 2026
 

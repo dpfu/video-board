@@ -2,31 +2,108 @@ import type { VideoCard } from './model';
 import type { SceneAnalysis } from './scenes';
 
 export type Probe = Pick<VideoCard, 'duration' | 'start' | 'sourceWidth' | 'sourceHeight'>;
-export type Analysis = { thumbnails: Blob[]; peaks: number[]; frameTimes: number[]; scenes: SceneAnalysis; note?: string };
+export type Analysis = {
+  thumbnails: Blob[];
+  peaks: number[];
+  frameTimes: number[];
+  scenes: SceneAnalysis;
+  note?: string;
+};
 export type CapturedFrame = { blob: Blob; time: number; duration: number };
-export type MediaRequest = { task: 'probe' | 'analyze' | 'capture' | 'scenes'; blob: Blob; time?: number; width?: number };
+export type MediaResults = {
+  probe: Probe;
+  analyze: Analysis;
+  capture: CapturedFrame;
+  scenes: SceneAnalysis;
+};
+type MediaTask = keyof MediaResults;
+export type MediaRequest =
+  | { task: 'probe' | 'analyze' | 'scenes'; blob: Blob }
+  | { task: 'capture'; blob: Blob; time: number; width?: number };
+export type MediaResponse =
+  | { type: 'progress'; label: string }
+  | { type: 'error'; message: string }
+  | { [Task in MediaTask]: { type: 'result'; task: Task; result: MediaResults[Task] } }[MediaTask];
 
-// Each request owns its decoder and can be cancelled without touching playback.
-function run<T>(request: MediaRequest, onProgress?: (label: string) => void, signal?: AbortSignal) {
-  const worker = new Worker(new URL('./media.worker.ts', import.meta.url), { type: 'module' });
-  const promise = new Promise<T>((resolve, reject) => {
-    const abort = () => { worker.terminate(); reject(new DOMException('Cancelled', 'AbortError')); };
-    if (signal?.aborted) { abort(); return; }
-    signal?.addEventListener('abort', abort, { once: true });
-    worker.onmessage = ({ data }) => {
-      if (data.progress) { onProgress?.(data.progress); return; }
-      worker.terminate();
+// Each request owns its decoder. Every exit releases the worker and listener.
+function run<Task extends MediaTask>(
+  request: MediaRequest & { task: Task },
+  onProgress?: (label: string) => void,
+  signal?: AbortSignal,
+): Promise<MediaResults[Task]> {
+  return new Promise((resolve, reject) => {
+    let worker: Worker | undefined,
+      settled = false;
+    const cleanup = () => {
       signal?.removeEventListener('abort', abort);
-      if (data.error) reject(new Error(data.error));
-      else resolve(data.result as T);
+      if (worker) {
+        worker.onmessage = null;
+        worker.onerror = null;
+        worker.onmessageerror = null;
+        worker.terminate();
+      }
     };
-    worker.onerror = event => { worker.terminate(); signal?.removeEventListener('abort', abort); reject(new Error(event.message || 'Media processing failed.')); };
-    worker.postMessage(request);
+    const fail = (cause: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(cause);
+    };
+    const abort = () => fail(signal?.reason ?? new DOMException('Cancelled', 'AbortError'));
+    if (signal?.aborted) {
+      abort();
+      return;
+    }
+    try {
+      worker = new Worker(new URL('./media.worker.ts', import.meta.url), { type: 'module' });
+      signal?.addEventListener('abort', abort, { once: true });
+      worker.onmessage = ({ data }: MessageEvent<MediaResponse>) => {
+        if (settled) return;
+        try {
+          if (data.type === 'progress') {
+            onProgress?.(data.label);
+            return;
+          }
+          if (data.type === 'error') {
+            fail(new Error(data.message));
+            return;
+          }
+          if (data.type !== 'result' || data.task !== request.task) {
+            fail(new Error('Unexpected media worker response.'));
+            return;
+          }
+          // One task per worker; the matching task tag binds this result type.
+          settled = true;
+          cleanup();
+          resolve(data.result as MediaResults[Task]);
+        } catch (error) {
+          fail(error);
+        }
+      };
+      worker.onerror = (event) => {
+        event.preventDefault();
+        fail(new Error(event.message || 'Media processing failed.'));
+      };
+      worker.onmessageerror = () => fail(new Error('Media worker response could not be read.'));
+      worker.postMessage(request);
+    } catch (error) {
+      fail(error);
+    }
   });
-  return promise;
 }
 
-export const probeVideo = (blob: Blob) => run<Probe>({ task: 'probe', blob });
-export const analyzeVideo = (blob: Blob, onProgress?: (label: string) => void) => run<Analysis>({ task: 'analyze', blob }, onProgress);
-export const captureFrame = (blob: Blob, time: number, options?: { width?: number; signal?: AbortSignal }) => run<CapturedFrame>({ task: 'capture', blob, time, width: options?.width }, undefined, options?.signal);
-export const detectScenes = (blob: Blob, onProgress?: (label: string) => void) => run<SceneAnalysis>({ task: 'scenes', blob }, onProgress);
+export const probeVideo = (blob: Blob) => run<'probe'>({ task: 'probe', blob });
+export const analyzeVideo = (blob: Blob, onProgress?: (label: string) => void) =>
+  run<'analyze'>({ task: 'analyze', blob }, onProgress);
+export const captureFrame = (
+  blob: Blob,
+  time: number,
+  options?: { width?: number; signal?: AbortSignal },
+) =>
+  run<'capture'>(
+    { task: 'capture', blob, time, width: options?.width },
+    undefined,
+    options?.signal,
+  );
+export const detectScenes = (blob: Blob, onProgress?: (label: string) => void) =>
+  run<'scenes'>({ task: 'scenes', blob }, onProgress);

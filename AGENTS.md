@@ -7,6 +7,9 @@ superseding the initial no-tests prototype instruction. Use focused Vitest
 behavior/storage checks and real-media Playwright workflows. Run `npm run check`.
 Browser tests use their own origin on port 4193 and fresh contexts; never point
 them at Daniel's working board on port 5193 or use private research media.
+Source, styles, tests and build scripts use pinned Prettier formatting:
+`npm run format`; `npm run check` includes its verification. Do not reformat the
+pinned LGPL port or generated fixtures; `.prettierignore` preserves them.
 
 Keep Daniel's product discussion and decisions in `SPEC.md` as the single working
 spec. Update it when the discussion changes an agreement, preserve superseded

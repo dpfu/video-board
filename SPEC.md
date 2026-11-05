@@ -225,6 +225,32 @@ covered/offscreen retrieval. The earlier reviews' default placement, boundary
 clamp feedback, fractional ticks, ZIP error wording and small-scale readability
 remain proposals. A dedicated focus-selection action is still open.
 
+## Code quality pass · 5 November 2026
+
+Daniel requested a complete code review and quality improvements, followed by a
+GitHub push. This pass preserves the current product scope, schema v3, source
+identities, linked-view behavior and FFmpeg port/reference fixtures.
+
+Implemented: readable formatting and a reproducible formatting check; a separate
+typed validator for ZIP manifests with indexed, iterative parent-graph checks;
+shared pure asset references; an explicitly tagged media-worker protocol with
+cleanup on every completion/failure/abort path; a shared cancellable playback
+clock; discriminated pointer gestures and source-seek parameters without fake
+whole-card casts. Docked Codes layout no longer mutates Undo snapshots. Restore
+resets hidden-source scrubbers to saved times. Unrelated pointer events cannot
+finish another drag. File operations prevent concurrent board edits; save errors
+and capture results recheck their snapshot/project generation before applying. Corrupt ZIP
+and manifest errors are now readable; this addresses the earlier ZIP-wording
+finding.
+
+Verification: **53 unit/storage checks and 18 Chromium workflows**, including
+real-media decoding, legacy migrations, shared frames, deep/cyclic contexts,
+worker disposal, hidden-source restoration and post-error editing. The focused
+dependency patch moves Vitest to 5.0.3; the dependency audit reports no known
+vulnerabilities. No production dependency or research-media storage migration
+is introduced. Detailed check commands and boundaries remain in the development
+notes; earlier audit evidence and product proposals above are retained.
+
 ## Interface and interaction
 
 Daniel requested a clean, compact, tactile **graphite/grey** interface with icons,

@@ -1,0 +1,10 @@
+node_modules/
+dist/
+tmp/
+package-lock.json
+**/*.md
+tests/fixtures/
+e2e/fixtures/
+public/licenses/
+# Keep the pinned LGPL port and its provenance unchanged in this quality pass.
+src/scdet.ts

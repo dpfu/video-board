@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useTimecode } from './useTimecode';
 import {
   ArrowUpLeft,
   BookOpen,
@@ -10,14 +10,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { IconButton } from './Icons';
-import {
-  clamp,
-  parseTimecode,
-  stillImageHeight,
-  timecode,
-  type StillCard,
-  type VideoCard,
-} from './model';
+import { clamp, stillImageHeight, timecode, type StillCard, type VideoCard } from './model';
 import { ModuleGrip, UndockButton, type DockControls } from './ModuleGrip';
 import { Regions } from './Regions';
 import { CodeChips } from './Coding';
@@ -72,12 +65,13 @@ export function Still({
   onCode: () => void;
   onDuplicate: () => void;
 }) {
-  const [draft, setDraft] = useState(timecode(still.time));
-  const [invalid, setInvalid] = useState(false);
-  useEffect(() => {
-    setDraft(timecode(still.time));
-    setInvalid(false);
-  }, [still.time]);
+  const field = useTimecode(still.time, {
+    accept: (time) => time >= 0 && time < video.duration,
+    formatOnCommit: false,
+    onCommit: (time) => {
+      if (Math.abs(time - still.time) > 0.0001) onTime(time);
+    },
+  });
   const frameTimes = video.frameTimes;
   const previous = [...frameTimes].reverse().find((time) => time < still.time - 0.00001);
   const next = frameTimes.find((time) => time > still.time + 0.00001);
@@ -86,15 +80,6 @@ export function Still({
   const ratio = Math.min(contentWidth / video.sourceWidth, imageHeight / video.sourceHeight);
   const imageWidth = ratio * video.sourceWidth,
     containedHeight = ratio * video.sourceHeight;
-  function submit() {
-    const time = parseTimecode(draft);
-    if (!Number.isFinite(time) || time < 0 || time >= video.duration) {
-      setInvalid(true);
-      return;
-    }
-    setInvalid(false);
-    if (Math.abs(time - still.time) > 0.0001) onTime(time);
-  }
   return (
     <>
       <header className="card-header still-header" onPointerDown={onDrag}>
@@ -103,25 +88,10 @@ export function Still({
         <input
           className="still-time"
           aria-label={`Still timecode from ${video.name}`}
-          aria-invalid={invalid}
           title="Edit timecode · mm:ss.mmm"
-          value={draft}
+          {...field}
           disabled={busy}
           spellCheck={false}
-          onChange={(event) => {
-            setDraft(event.target.value);
-            setInvalid(false);
-          }}
-          onBlur={submit}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') event.currentTarget.blur();
-            if (event.key === 'Escape') {
-              event.preventDefault();
-              event.stopPropagation();
-              setDraft(timecode(still.time));
-              setInvalid(false);
-            }
-          }}
         />
         <span className="control-spacer" />
         <IconButton icon={ScanLine} label="Draw region" aria-pressed={drawing} onClick={onDraw} />

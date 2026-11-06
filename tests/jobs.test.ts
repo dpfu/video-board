@@ -135,3 +135,47 @@ describe('background job lifetimes', () => {
     expect(continued).toBe(true);
   });
 });
+
+it('disposing a job owner aborts native work, drops queued work, and silences callbacks', async () => {
+  const started = deferred(),
+    release = deferred();
+  const states: JobState[][] = [],
+    failures: unknown[] = [];
+  const queue = new BackgroundJobs((state) => states.push(state));
+  let owned!: JobContext,
+    queued = false;
+  queue.enqueue(
+    { sourceId: 'first', kind: 'analysis' },
+    async (job) => {
+      owned = job;
+      started.resolve();
+      await release.promise;
+      job.progress('Late progress');
+      throw new Error('Late failure');
+    },
+    (error) => failures.push(error),
+  );
+  queue.enqueue(
+    { sourceId: 'next', kind: 'analysis' },
+    async () => {
+      queued = true;
+    },
+    (error) => failures.push(error),
+  );
+  await started.promise;
+  queue.dispose();
+  const count = states.length;
+  expect(owned.signal.aborted).toBe(true);
+  release.resolve();
+  await queue.cancelAll();
+  expect(states).toHaveLength(count);
+  expect(queued).toBe(false);
+  expect(failures).toEqual([]);
+  expect(
+    queue.enqueue(
+      { sourceId: 'new', kind: 'scenes' },
+      async () => {},
+      () => {},
+    ),
+  ).toBe(false);
+});

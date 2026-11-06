@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useImperativeHandle, useState } from 'react';
 import {
   BookOpen,
   Camera,
@@ -18,7 +18,6 @@ import {
 import { IconButton } from './Icons';
 import { Timeline } from './Timeline';
 import {
-  clamp,
   timecode,
   videoImageHeight,
   type Code,
@@ -28,7 +27,8 @@ import {
 } from './model';
 import { CodeChips } from './Coding';
 import { ModuleGrip, UndockButton, type DockControls } from './ModuleGrip';
-import { observeVideoFrames, publishTime } from './transport';
+import { publishTime } from './transport';
+import { usePlayback } from './usePlayback';
 
 export type PlayerHandle = {
   seek: (time: number) => void;
@@ -81,74 +81,36 @@ export const VideoPlayer = forwardRef<
   },
   ref,
 ) {
-  const element = useRef<HTMLVideoElement>(null);
-  const [time, setTime] = useState(video.time);
-  const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
   const [loop, setLoop] = useState(false);
   const [speed, setSpeed] = useState(1);
-  const desiredTime = useRef(video.time);
-  const pendingSeek = useRef<number | null>(null);
-  const animation = useRef(0);
-  const patch = useRef(onPatch);
-  patch.current = onPatch;
-
-  function seek(value: number) {
-    const next = clamp(value, 0, Math.max(0, video.duration - 0.000001));
-    element.current?.pause();
-    desiredTime.current = next;
-    setTime(next);
-    publishTime(video.id, next);
-    pendingSeek.current = next;
-    if (!animation.current)
-      animation.current = requestAnimationFrame(() => {
-        animation.current = 0;
-        if (element.current && pendingSeek.current !== null) {
-          element.current.currentTime = pendingSeek.current;
-          patch.current({ time: pendingSeek.current });
-          pendingSeek.current = null;
-        }
-      });
-  }
+  const playback = usePlayback({
+    url,
+    end: video.duration,
+    initial: video.time,
+    rate: speed,
+    coalesce: true,
+    onTime: (time) => publishTime(video.id, time),
+    onPersist: (time) => onPatch({ time }),
+    onError: (kind) =>
+      onError(
+        kind === 'play'
+          ? 'Playback could not start. This browser may not support the file’s audio or video codec.'
+          : `The browser could not play ${video.name}. Try an H.264 MP4 or WebM file.`,
+      ),
+  });
+  const {
+    element,
+    time: desiredTime,
+    actions: { seek, toggle: togglePlay },
+  } = playback;
+  const { time } = playback.state;
+  const playing = playback.state.phase === 'playing';
   useImperativeHandle(ref, () => ({
     seek,
     element: () => element.current,
     time: () => desiredTime.current,
   }));
-
-  useEffect(() => {
-    const player = element.current;
-    if (!player) return;
-    const sync = () => {
-      if (!player.seeking && pendingSeek.current === null) {
-        desiredTime.current = player.currentTime;
-        setTime(player.currentTime);
-        publishTime(video.id, player.currentTime);
-      }
-    };
-    const stop = observeVideoFrames(player, sync);
-    return () => {
-      stop();
-      cancelAnimationFrame(animation.current);
-      animation.current = 0;
-      pendingSeek.current = null;
-    };
-  }, []);
-
-  async function togglePlay() {
-    const player = element.current;
-    if (!player) return;
-    if (!player.paused) player.pause();
-    else {
-      try {
-        await player.play();
-      } catch {
-        onError(
-          'Playback could not start. This browser may not support the file’s audio or video codec.',
-        );
-      }
-    }
-  }
   return (
     <>
       <header className="card-header" onPointerDown={onDrag}>
@@ -181,38 +143,7 @@ export const VideoPlayer = forwardRef<
           preload="auto"
           muted={muted}
           loop={loop}
-          onLoadedMetadata={() => {
-            if (element.current) {
-              element.current.currentTime = video.time;
-              publishTime(video.id, video.time);
-            }
-          }}
-          onClick={() => void togglePlay()}
-          onPlay={() => setPlaying(true)}
-          onPause={() => {
-            setPlaying(false);
-            if (element.current) patch.current({ time: element.current.currentTime });
-          }}
-          onEnded={() => {
-            setPlaying(false);
-            if (element.current) {
-              const end = element.current.currentTime;
-              desiredTime.current = end;
-              setTime(end);
-              publishTime(video.id, end);
-              patch.current({ time: end });
-            }
-          }}
-          onSeeked={() => {
-            if (element.current && pendingSeek.current === null) {
-              desiredTime.current = element.current.currentTime;
-              setTime(element.current.currentTime);
-              publishTime(video.id, element.current.currentTime);
-            }
-          }}
-          onError={() =>
-            onError(`The browser could not play ${video.name}. Try an H.264 MP4 or WebM file.`)
-          }
+          onClick={togglePlay}
         />
         {!playing && (
           <button
@@ -245,7 +176,6 @@ export const VideoPlayer = forwardRef<
           onChange={(event) => {
             const rate = Number(event.target.value);
             setSpeed(rate);
-            if (element.current) element.current.playbackRate = rate;
           }}
         >
           {[0.25, 0.5, 1, 1.5, 2].map((rate) => (

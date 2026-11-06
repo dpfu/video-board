@@ -37,7 +37,7 @@ export function EvidenceSpace({
   onVisible,
 }: {
   space: SpaceCard;
-  board: Board;
+  board: Pick<Board, 'videos' | 'stills' | 'quotations' | 'codes'>;
   urls: Record<string, string>;
   posters: Record<string, string>;
   activeQuotation: string | null;
@@ -82,9 +82,9 @@ export function EvidenceSpace({
         item.y + EVIDENCE_HEIGHT > view.y - 50 &&
         item.y < view.y + view.height + 50),
   );
-  const visibleKey = visible.map((item) => item.quotationId).join('|');
+  const visibleKey = JSON.stringify(visible.map((item) => item.quotationId));
   useEffect(() => {
-    report.current(visibleKey ? visibleKey.split('|') : []);
+    report.current(JSON.parse(visibleKey) as string[]);
     return () => report.current([]);
   }, [visibleKey]);
   useEffect(() => {

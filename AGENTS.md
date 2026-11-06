@@ -11,6 +11,12 @@ Source, styles, tests and build scripts use pinned Prettier formatting:
 `npm run format`; `npm run check` includes its verification. Do not reformat the
 pinned LGPL port or generated fixtures; `.prettierignore` preserves them.
 
+`App.tsx` composes the focused controllers in `src/app/`; put behavior in its
+existing owner and keep the shell/module views concerned with rendering.
+`useActions` keeps fixed controller action names stable while reading current
+dependencies. Preserve the memoized media boundary when adding camera/status UI.
+See `docs/DEVELOPMENT.md` for ownership and verification evidence.
+
 Keep Daniel's product discussion and decisions in `SPEC.md` as the single working
 spec. Update it when the discussion changes an agreement, preserve superseded
 decisions briefly with their rationale, and distinguish implemented behavior,

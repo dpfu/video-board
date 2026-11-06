@@ -133,3 +133,13 @@ describe('media worker lifetime', () => {
     for (const instance of TestWorker.instances) expect(instance.terminate).toHaveBeenCalledOnce();
   });
 });
+
+it('cancels an import probe and releases its decoder before metadata arrives', async () => {
+  const controller = new AbortController(),
+    result = probeVideo(new Blob(), controller.signal);
+  const worker = TestWorker.instances[0];
+  controller.abort();
+  await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+  expect(worker.terminate).toHaveBeenCalledOnce();
+  expect(worker.onmessage).toBeNull();
+});

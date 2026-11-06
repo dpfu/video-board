@@ -49,7 +49,7 @@ export function Coding({
   onCancelDraft,
   onSource,
 }: {
-  board: Board;
+  board: Pick<Board, 'videos' | 'quotations' | 'codes'>;
   target?: Quotation;
   draft: RangeDraft | null;
   draftValid: boolean;

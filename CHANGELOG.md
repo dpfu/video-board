@@ -23,10 +23,11 @@ qualitative video analysis.
 - Groups, collection memos and arrangements in local storage, Undo and project
   ZIPs. PNG export fits each complete arrangement into its frame, including
   scrolled-out items. Additional views do not duplicate CSV quotation rows.
-- Expand coverage from 71 to **131 checks: 97 Vitest checks and 34 real-media
+- Expand coverage from 71 to **154 checks: 116 Vitest checks and 38 real-media
   Chromium workflows**. Include all manual/live transfer combinations, legacy
   ZIP migration, zoomed/scrolled drops, same-project restore, preview cleanup and
-  decoded PNG content for scrolled-out evidence.
+  decoded PNG content for scrolled-out evidence. Cover save ordering/recovery,
+  asset/worker/playback disposal, inactive-clip scrubbing and shared time fields.
 
 ### Fixed
 
@@ -43,6 +44,14 @@ qualitative video analysis.
 
 ### Changed
 
+- Refactor the application into focused document/autosave, media/analysis,
+  evidence/editing, preview, viewport/gesture and project-file controllers.
+  Separate shell, memoized board modules and shared card frames. Keep current
+  actions stable without rerendering the media tree for camera/save progress.
+- Share native playback and timecode editing across source, clip, evidence and
+  still views. Give Blob URLs, queued saves, short tasks and native player
+  listeners/seek requests explicit owners and cleanup. Preserve resource owners,
+  player position/intent and unsaved drafts through Strict Mode and hot refresh.
 - Give project operations, preview ownership and evidence editing small typed
   transition models. A cancellable serial queue owns analysis progress and
   suppresses obsolete job results; project generations change after commit.

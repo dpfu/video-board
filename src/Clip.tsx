@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useState, type PointerEvent } from 'react';
 import {
   ArrowUpLeft,
   BookOpen,
@@ -18,7 +18,7 @@ import { ModuleGrip, UndockButton, type DockControls } from './ModuleGrip';
 import { RangeEditor } from './RangeEditor';
 import { clamp, timecode, type ClipCard, type Code, type Quotation, type VideoCard } from './model';
 import { CodeChips } from './Coding';
-import { observeVideoFrames } from './transport';
+import { usePlayback } from './usePlayback';
 import { usePointerGesture } from './pointer';
 
 export function Clip({
@@ -76,16 +76,28 @@ export function Clip({
   onRate: (rate: number) => void;
   poster?: string;
 }) {
-  const element = useRef<HTMLVideoElement | null>(null),
-    bounds = useRef(quotation);
-  bounds.current = quotation;
-  const pendingSeek = useRef<number | null>(null);
   const { active: scrubbing, finish } = usePointerGesture<{ pointer: number }>();
-  const [time, setTime] = useState(quotation.start),
-    [muted, setMuted] = useState(true),
-    [playing, setPlaying] = useState(false),
-    [ready, setReady] = useState(false);
+  const [muted, setMuted] = useState(true);
   const rate = clip.rate || 1;
+  const playback = usePlayback({
+    active,
+    url,
+    start: quotation.start,
+    end: quotation.end,
+    initial: quotation.start,
+    rate,
+    bounded: true,
+    autoplay: true,
+    onActivate: () => {
+      if (!pinned) onPin();
+    },
+  });
+  const {
+    element,
+    actions: { seek },
+  } = playback;
+  const { time, ready } = playback.state;
+  const playing = playback.state.phase === 'playing';
   const position = clamp((time - quotation.start) / (quotation.end - quotation.start), 0, 1);
   const imageHeight = clip.height
     ? clip.height - 28 - 94
@@ -100,41 +112,6 @@ export function Clip({
   useEffect(() => {
     if (!pinned) setMuted(true);
   }, [pinned]);
-  useEffect(() => {
-    const player = element.current;
-    if (!active || !player) {
-      setPlaying(false);
-      setReady(false);
-      setTime(quotation.start);
-      return;
-    }
-    const sync = () => {
-      const q = bounds.current;
-      if (!player.seeking && (player.currentTime >= q.end || player.currentTime < q.start - 0.001))
-        player.currentTime = q.start;
-      setTime(clamp(player.currentTime, q.start, q.end));
-    };
-    return observeVideoFrames(player, sync);
-  }, [active]);
-  useEffect(() => {
-    const player = element.current;
-    if (player && (player.currentTime < quotation.start || player.currentTime >= quotation.end))
-      player.currentTime = quotation.start;
-    if (!active) setTime(quotation.start);
-  }, [quotation.start, quotation.end, active]);
-  function seek(value: number) {
-    const next = clamp(value, quotation.start, quotation.end - 0.000001);
-    setTime(next);
-    const player = element.current;
-    if (!active || !player) {
-      pendingSeek.current = next;
-      onPin();
-    } else {
-      if (!pinned) onPin();
-      player.pause();
-      player.currentTime = next;
-    }
-  }
   function scrub(e: PointerEvent<HTMLDivElement>) {
     const r = e.currentTarget.getBoundingClientRect();
     seek(
@@ -185,29 +162,6 @@ export function Clip({
             playsInline
             muted={muted}
             preload="auto"
-            onLoadedMetadata={() => {
-              const el = element.current;
-              if (el) {
-                el.currentTime = pendingSeek.current ?? bounds.current.start;
-                el.playbackRate = rate;
-                if (pendingSeek.current === null) void el.play().catch(() => setPlaying(false));
-                pendingSeek.current = null;
-              }
-            }}
-            onPlay={() => setPlaying(true)}
-            onPause={() => setPlaying(false)}
-            onEnded={() => {
-              const el = element.current;
-              if (el) {
-                el.currentTime = bounds.current.start;
-                void el.play().catch(() => {});
-              }
-            }}
-            onSeeked={() => setReady(true)}
-            onTimeUpdate={() => {
-              const el = element.current;
-              if (el && el.currentTime >= bounds.current.end) el.currentTime = bounds.current.start;
-            }}
           />
         )}
         {!pinned && (
@@ -228,8 +182,7 @@ export function Clip({
           aria-pressed={pinned}
           onClick={() => {
             if (!pinned) onPin();
-            else if (element.current?.paused) void element.current.play();
-            else element.current?.pause();
+            else playback.actions.toggle();
           }}
         />
         <span className="player-time">{timecode(time)}</span>
@@ -240,7 +193,6 @@ export function Clip({
           onChange={(e) => {
             const value = Number(e.target.value);
             onRate(value);
-            if (element.current) element.current.playbackRate = value;
           }}
         >
           {[0.25, 0.5, 1, 1.5, 2].map((r) => (

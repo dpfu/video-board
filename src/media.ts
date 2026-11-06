@@ -92,7 +92,8 @@ function run<Task extends MediaTask>(
   });
 }
 
-export const probeVideo = (blob: Blob) => run<'probe'>({ task: 'probe', blob });
+export const probeVideo = (blob: Blob, signal?: AbortSignal) =>
+  run<'probe'>({ task: 'probe', blob }, undefined, signal);
 export const analyzeVideo = (
   blob: Blob,
   onProgress?: (label: string) => void,

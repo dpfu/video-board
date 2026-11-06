@@ -11,9 +11,11 @@ export type JobContext = {
 export class BackgroundJobs {
   private jobs = new Map<string, Job>();
   private tail = Promise.resolve();
+  private disposed = false;
   constructor(private readonly changed: (jobs: JobState[]) => void) {}
 
   private publish() {
+    if (this.disposed) return;
     this.changed(
       [...this.jobs.values()].map(({ sourceId, kind, phase, label }) => ({
         sourceId,
@@ -30,7 +32,7 @@ export class BackgroundJobs {
     failed: (error: unknown) => void,
   ) {
     const key = `${request.kind}:${request.sourceId}`;
-    if (this.jobs.has(key)) return false;
+    if (this.disposed || this.jobs.has(key)) return false;
     const job: Job = {
       ...request,
       phase: 'queued',
@@ -76,5 +78,9 @@ export class BackgroundJobs {
     this.publish();
     await draining.catch(() => {});
     return interrupted.map(({ sourceId, kind }) => ({ sourceId, kind }));
+  }
+  dispose() {
+    this.disposed = true;
+    void this.cancelAll();
   }
 }

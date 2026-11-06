@@ -41,7 +41,7 @@ For a shorter iteration, use `npm test` or `npm run test:watch`; `npm run test:e
 builds and runs just the browser workflows. Browser tests start a separate server
 on **4193** and use fresh contexts, leaving the working board on **5193** alone.
 
-- **97 Vitest checks:** group movement, detaching, independent resizing, docking
+- **116 Vitest checks:** group movement, detaching, independent resizing, docking
   on four sides and at different zoom levels, legacy v1 migration, persistence
   and atomic rollback after a simulated storage failure; native FFmpeg score
   parity on 8/10-bit sequences, reusable buffers, geometry changes, 16-bit
@@ -57,8 +57,12 @@ on **4193** and use fresh contexts, leaving the working board on **5193** alone.
   visibility, stored-membership reconciliation and v1/v2/v3 ZIP migration;
   guarded project phases, pre/post-commit failure handling, serial job ownership,
   cancellation and restart, obsolete progress suppression, preview ownership,
-  exclusive editing modes and draft-scoped validity/save callbacks.
-- **34 Chromium workflows:** real-media import and analysis; synchronized resized
+  exclusive editing modes and draft-scoped validity/save callbacks; debounced
+  serial save ordering/failure recovery, draining/disposal, transactional URL
+  allocation/revocation, exclusive short tasks, Undo's analysis/camera policy,
+  cancelled import probes, native playback seek/loop/promise/listener cleanup,
+  effect replay and retained seek/playback intent.
+- **38 Chromium workflows:** real-media import and analysis; synchronized resized
   scrubbers and exact linked-still recapture; magnetic group interactions, Undo
   and reload; ZIP roundtrip, rejected incomplete backups and offscreen PNG export;
   known-cut detection, cached threshold adjustment, shot seeking and older boards;
@@ -82,7 +86,9 @@ on **4193** and use fresh contexts, leaving the working board on **5193** alone.
   interrupted analysis/cuts and successful retry of pending backups, file-boundary
   preview shutdown, retained editing context, exclusive drawing/segment modes,
   fresh draft validity and media capture, unfinished rectangle cancellation,
-  foreign pointer releases, Escape, blur and lost capture.
+  foreign pointer releases, Escape, blur and lost capture; paused activation by
+  inactive-clip scrubbing, edited-boundary playback, shared time-field rejection/
+  Escape/retiming, autosave failure and next-edit recovery, and board capture loss.
 
 The versioned [synthetic fixture](../e2e/fixtures/README.md) contains no private media.
 Browser workflows use the actual decoder, workers and IndexedDB. The unit storage
@@ -92,7 +98,14 @@ under ignored `tmp/playwright/`; open the HTML report with
 The development watcher excludes `tmp/`: generating HTML reports/traces there
 must not reload an active demo or discard its transient selection/draft.
 
-Verified on **bugglzwerg, 6 November 2026** after the transition implementation:
+Verified on **bugglzwerg, 7 November 2026** after the full application refactor:
+`npm run check` passed formatting, **116 unit/storage checks, 38 Chromium workflows**
+and the production build. The new inactive-clip scrub/loop workflow also passed
+two consecutive repetitions. Reviewed generated-media board screenshots and
+completed a separate Strict Mode/two-hot-refresh walkthrough. Production
+interaction benchmarks and the small measured CPU overhead are recorded below.
+
+Previously verified on **bugglzwerg, 6 November 2026** after the transition implementation:
 `npm run check` passed formatting, **131 checks** and the production build. The
 eight new transition workflows also passed two consecutive repetitions. Reports
 and generated downloads use the usual ignored `tmp/playwright/` paths.
@@ -135,6 +148,78 @@ viewport mismatch.
 Automated coverage currently targets Chromium with VP9/Opus, not a codec/browser
 compatibility matrix.
 
+## Application ownership refactor · 6–7 November 2026
+
+Daniel requested the full application refactor after the focused transition pass.
+`App.tsx` is now a 116-line composition, down from 2,098 lines. Controllers own
+state and effects; the shell and board modules render their projections.
+
+| Owner | Responsibility |
+| --- | --- |
+| `src/app/useDocument.ts`, `src/history.ts`, `src/autosave.ts` | Immutable document changes, shared-space reconciliation, 30-entry Undo and debounced serial persistence. Undo retains completed analysis and the current camera. Save status belongs to the latest revision; suspension drains I/O before atomic replacement. |
+| `src/assets.ts`, `src/app/useAssets.ts` | Original/derived Blobs and their object URLs. Replacement allocates first, releases partial allocations on failure, and changes generation after storage commit. Retired revision URLs live for one second, then revoke; disposal releases every remaining URL. |
+| `src/app/useAnalysis.ts`, `src/jobs.ts` | Serial analysis/cut jobs and progress. Disposal aborts running work, drops queued jobs and silences obsolete callbacks. |
+| `src/app/useMedia.ts`, `src/tasks.ts` | Import/probe, track creation and still capture/retiming. Synchronous task ownership rejects duplicate capture/import requests; owner disposal cancels workers and rejects late commits. Original media remain shared. |
+| `src/app/useEditing.ts`, `src/app/useEvidence.ts` | Analytical focus, drafts/regions, codes, linked quotation views and evidence-space commands. Visual selection remains separate from analytical editing modes. Actions read the current document and editing state. |
+| `src/app/usePreviews.ts`, `src/preview.ts` | Hover delay, exclusive preview ownership, pinning, removal reconciliation and gesture/file boundaries. |
+| `src/app/useViewport.ts`, `src/app/useInteraction.ts` | Camera, visible stage size, global pointer/keyboard/wheel listeners, magnetic movement/resizing, hand mode and motion interruption. Capture loss ends an owned board gesture. |
+| `src/app/useProjectFiles.ts`, `src/project.ts` | Startup, exclusive file operations, recovery backup, drain/atomic replace/install, failed-open recovery and ignoring results after the file owner is disposed. |
+| `src/app/useBoardView.ts`, `src/app/BoardModules.tsx`, `src/app/ModuleFrame.tsx`, `src/app/AppShell.tsx` | Culling/cover requests, memoized module data, shared module frame and shell UI. Camera/name/save/progress are outside the media-data projection. Stable membership sets and action objects preserve the existing fast camera path. |
+| `src/lifetime.ts` | Preserve long-lived owners through immediate React effect replay (Strict Mode/hot refresh), and release them after actual unmount. Native player sessions retain position/intent across replay and reset for a new URL. |
+| `src/playback.ts`, `src/usePlayback.ts`, `src/useTimecode.ts` | Owned native player listeners/frame observation, deferred/latest coalesced seeks, bounded loops, rate changes, stale play requests and cleanup; shared time-field validation, commit and Escape. |
+
+`src/useActions.ts` gives each controller a fixed set of stable action identities
+that call its current dependencies. The renderer receives explicit state props
+and stable actions; it needs no hand-maintained dependency list that can omit
+new editor state. Source playback alone publishes the shared source clock.
+Clips/evidence remain independent views of the original Blob; hover/evidence
+playback is muted, and explicit clip pinning keeps its existing audio controls.
+Frame-relative coded rectangles remain retimeable.
+
+The regression additions cover save ordering, stale completion, failure/recovery,
+project drain/disposal, URL allocation failure and exactly-once release, task
+ownership, retained analysis/camera through Undo, cancelled probes, and native
+playback metadata/seek/loop/rate/error/disposal. Browser additions use real media
+to activate an inactive clip by scrubbing without autoplay, loop edited bounds,
+reject/reset invalid fields and retime linked still views, recover after an
+injected autosave failure, and continue after losing board pointer capture.
+Assertions use decoded source-frame boundaries; arbitrary millisecond targets
+are not assumed to identify exact frames.
+
+A production-build comparison used the existing benchmark on bugglzwerg with
+120/240 clips, three measured runs after warm-up and 60 pointer steps per
+interaction. Both builds used the same generated video, disposable Chromium,
+1440×1000 viewport and reduced motion. Baseline is `bc512d7`; the refactor bundle
+is `index-N3hlZVaI.js` (385.03 kB / 121.66 kB gzip, versus 374.03 / 117.66).
+CSS and media-worker bundles are unchanged.
+
+| Clips / interaction | Main-thread task ms, before → after | P95 frame ms, before → after |
+| --- | --- | --- |
+| 120 / pan | 125.9 → 133.5 | 26.9 → 25.7 |
+| 120 / drag | 178.6 → 204.3 | 26.9 → 27.0 |
+| 240 / pan | 116.2 → 128.9 | 27.0 → 26.7 |
+| 240 / drag | 197.7 → 206.6 | 25.9 → 27.0 |
+
+These are per-run medians, not per-frame CPU costs. End-to-end interaction medians
+remain around 1.5 seconds, with measured task work increasing about 5–14%. This is a
+small structural overhead, not a speedup claim; frame timing remains in the same
+range and culling/memoization retain the previous fast path. Raw runs are local
+ignored `tmp/performance/before-application-refactor.json` and
+`tmp/performance/after-application-refactor.json`; the table preserves the result.
+
+A separate disposable Vite/Chromium walkthrough mounted the app under React
+Strict Mode, imported generated media and coded a region. Two actual hot refreshes
+retained the unsaved time-field draft, source playback and original asset URLs
+without navigation. Retiming the coded frame, capturing another still and
+persisting a renamed board still worked afterward. No runtime/console errors.
+Evidence is local ignored `tmp/refactor/strict-refresh.json` and
+`tmp/refactor/strict-refresh-board.png`; the working origin on 5193 was untouched.
+
+The existing `partial` analysis flag remains compatible; richer persisted outcome
+reporting is deferred. This refactor changes no schema, dependency, codec support,
+FFmpeg scorer/reference or CSS. Tests remain a Chromium/generated-media suite,
+not a cross-browser/codec matrix.
+
 ## Explicit transitions · 6 November 2026
 
 The source audit found a broken coordination transition: project opening
@@ -175,10 +260,11 @@ All use generated media, fresh contexts and port 4193. This is lifecycle
 verification, not a new decoding-performance or codec-coverage claim.
 
 Project schema remains **v4**; no dependency or FFmpeg scorer/reference change.
-The smaller cache/input/animation machines retain their existing implementations
-except for shared pointer cleanup and editor identity. The persisted `partial`
-analysis outcome still covers both incomplete audio and analysis failure; a
-richer persisted outcome model and broader player unification remain deferred.
+At that stage smaller cache/input/animation machines retained their existing
+implementations except for shared pointer cleanup and editor identity. The later
+application refactor above consolidates player/time-field ownership; the persisted
+`partial` analysis outcome still covers both incomplete audio and analysis failure,
+and richer persisted outcome reporting remains deferred.
 
 ## Test refinement · 6 November 2026
 

@@ -1,6 +1,7 @@
 import { useEffect, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useTimecode } from './useTimecode';
 import { usePointerGesture } from './pointer';
-import { clamp, parseTimecode, timecode } from './model';
+import { clamp, timecode } from './model';
 
 function TimeField({
   label,
@@ -13,49 +14,11 @@ function TimeField({
   onValue: (value: number) => void;
   onValidity: (valid: boolean) => void;
 }) {
-  const [draft, setDraft] = useState(timecode(value)),
-    [invalid, setInvalid] = useState(false);
-  useEffect(() => {
-    setDraft(timecode(value));
-    setInvalid(false);
-    onValidity(true);
-  }, [value]);
+  const field = useTimecode(value, { onCommit: onValue, onValidity });
   return (
     <label>
       <span>{label}</span>
-      <input
-        aria-label={label}
-        className="range-time"
-        value={draft}
-        aria-invalid={invalid}
-        spellCheck={false}
-        onChange={(e) => {
-          setDraft(e.target.value);
-          setInvalid(false);
-          onValidity(Number.isFinite(parseTimecode(e.target.value)));
-        }}
-        onBlur={() => {
-          const next = parseTimecode(draft);
-          if (!Number.isFinite(next)) {
-            setInvalid(true);
-            onValidity(false);
-            return;
-          }
-          onValidity(true);
-          onValue(next);
-          setDraft(timecode(value));
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') e.currentTarget.blur();
-          if (e.key === 'Escape') {
-            e.preventDefault();
-            e.stopPropagation();
-            setDraft(timecode(value));
-            setInvalid(false);
-            onValidity(true);
-          }
-        }}
-      />
+      <input aria-label={label} className="range-time" spellCheck={false} {...field} />
     </label>
   );
 }

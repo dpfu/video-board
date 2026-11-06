@@ -65,9 +65,9 @@ export function useClipPosters(
     board.stills,
     board.camera,
     viewport,
-    evidenceIds.join('|'),
+    JSON.stringify(evidenceIds),
   ]);
-  const key = requests.map((r) => r.key).join('|');
+  const key = JSON.stringify(requests.map((r) => r.key));
   useEffect(() => {
     for (const url of cache.current.values()) URL.revokeObjectURL(url);
     cache.current.clear();

@@ -171,9 +171,10 @@ layout, code and quotation data remain independent.
    the full suite, inspect the diff, update development notes/changelog and push
    the verified result to the existing GitHub/Pages target.
 
-The audit's smaller field, cache and animation machines keep their existing
-implementations unless needed by these boundaries. Broader player unification,
-new analysis outcome formats and a rewrite of every local UI state are deferred.
+For that focused pass, smaller field/cache/animation machines, broader player
+unification and new analysis outcome formats were deferred. The application
+refactor below subsequently consolidates player and time-field ownership while
+retaining the existing persisted analysis format.
 
 Verification: **97 unit/storage checks and 34 Chromium workflows**. New browser
 cases hold real worker results and fail an atomic replacement to verify automatic
@@ -183,6 +184,61 @@ rejection, fresh draft validity, capturing during a draft, unfinished rectangle
 cancellation, foreign pointers, Escape, blur and lost capture. The eight new
 workflows passed repeated runs. See [transition implementation](docs/DEVELOPMENT.md#explicit-transitions--6-november-2026)
 for ownership, failure handling and verification limits.
+
+## Application refactor · 6–7 November 2026
+
+Daniel requested a full refactor after the focused transition pass. This expands
+that earlier scope into the application's ownership and composition; it does not
+change the research model, compact design or v4 project format.
+
+**Implemented plan:**
+
+1. Separate the board document, Undo and autosave from project files and media
+   resources. Give queued saves, Blob URLs and asynchronous work explicit owners
+   and cleanup. Preserve atomic replacement and recovery after failed opening.
+2. Move import/analysis, still capture, evidence editing/commands, preview ownership,
+   viewport/gestures and file operations into focused controllers with stable,
+   current-state actions. Make App a composition of those owners and views.
+3. Extract board modules and the application shell. Keep camera and job-progress
+   updates from rebuilding every media/editor view; retain viewport culling,
+   shared original media and quotation identities.
+4. Consolidate native playback/seek and bounded preview behavior, plus editable
+   timecode fields, while retaining independent source clocks, muted hover,
+   explicit pinning and frame-relative region coordinates.
+5. Add regression coverage for changed ownership, stale asynchronous results,
+   resource disposal and editor/playback boundaries. Run the entire check suite,
+   inspect actual generated-media workflows and measure board interactions.
+6. Update development notes and the changelog, review the complete diff, then
+   push the verified implementation and confirm GitHub Pages deployment.
+
+`App.tsx` now composes focused controllers in `src/app/`, with separate shell,
+module rendering and shared card frames. `Autosave`, `AssetLibrary`, `Tasks` and
+`Playback` own their asynchronous/resource lifetimes. Stable action identities
+read current dependencies, and the media tree receives only the data it renders;
+camera, save and job-progress updates preserve its memoization.
+
+Source players, clip views and evidence previews share native playback lifecycle,
+bounded looping, deferred/coalesced seeking and stale-request cleanup. Their
+controls remain independent: only source players publish the source clock;
+hover/evidence previews remain muted and explicit clip pinning permits audio.
+Timecode editors share draft/validation/Escape behavior. Pending import/capture
+work and queued analysis are cancelled on owner disposal; file work rejects late
+results after disposal. React effect replay preserves these owners through
+Strict Mode/hot refresh; player sessions retain their position and intent. URL replacement keeps old revisions briefly for live
+media, then revokes them; project replacement releases the old project.
+
+The FFmpeg scorer, migration rules, v4 format and exports remain intact. No new
+framework or dependency. Small presentation states remain local. The persisted
+`partial` analysis flag retains its existing meaning; richer analysis reporting
+is a separate product decision.
+
+Verification on **7 November 2026**: `npm run check` passed formatting, TypeScript,
+production build, **116 unit/storage checks and 38 Chromium workflows**. A separate
+Strict Mode/two-hot-refresh walkthrough retained drafts, playback and original
+URLs, then successfully recaptured coded frames and saved new work. Reviewed the
+resulting board screenshots. Measured 120/240-clip interactions retain similar
+frame timing with about 5–14% additional main-thread work; exact measurements and
+ownership details are preserved in [development notes](docs/DEVELOPMENT.md).
 
 ## Exploratory pass · 5 November 2026
 

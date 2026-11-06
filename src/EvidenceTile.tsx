@@ -1,4 +1,3 @@
-import { useEffect, useRef } from 'react';
 import { ArrowUpRight, GripVertical, Link2, Pause, Play, Tags, VolumeX, X } from 'lucide-react';
 import { CodeChips } from './Coding';
 import { IconButton } from './Icons';
@@ -11,6 +10,7 @@ import {
   type VideoCard,
 } from './model';
 import { evidenceLabel, QUOTATION_DRAG } from './spaces';
+import { usePlayback } from './usePlayback';
 
 export function EvidenceTile({
   item,
@@ -53,7 +53,6 @@ export function EvidenceTile({
   onPreview: (hover: boolean, pin?: boolean) => void;
   onStop: () => void;
 }) {
-  const player = useRef<HTMLVideoElement>(null);
   const temporal = q.kind === 'range' || q.kind === 'video';
   const label = evidenceLabel(q);
   const scope =
@@ -65,31 +64,15 @@ export function EvidenceTile({
           ? 'Video'
           : 'Segment';
   const aspect = source.sourceWidth / source.sourceHeight;
-  useEffect(() => {
-    const video = player.current;
-    if (!video) return;
-    function start() {
-      if (!video) return;
-      video.currentTime = q.start;
-      void video.play().catch(() => {});
-    }
-    if (video.readyState >= 1) start();
-    else video.addEventListener('loadedmetadata', start, { once: true });
-    return () => {
-      video.removeEventListener('loadedmetadata', start);
-      video.pause();
-    };
-  }, [active, q.start, q.end, url]);
-  function loop() {
-    const video = player.current;
-    if (
-      video &&
-      (video.ended || video.currentTime >= q.end - 0.025 || video.currentTime < q.start)
-    ) {
-      video.currentTime = q.start;
-      void video.play().catch(() => {});
-    }
-  }
+  const playback = usePlayback({
+    active: temporal && active && !!url,
+    url,
+    start: q.start,
+    end: q.end,
+    initial: q.start,
+    bounded: true,
+    autoplay: true,
+  });
   return (
     <article
       className={`evidence-tile ${selected ? 'is-active' : ''}`}
@@ -164,14 +147,12 @@ export function EvidenceTile({
           )}
           {temporal && active && url && (
             <video
-              ref={player}
+              ref={playback.element}
               src={url}
               muted
               playsInline
               preload="auto"
               aria-label={`Muted preview: ${label}`}
-              onTimeUpdate={loop}
-              onEnded={loop}
             />
           )}
         </div>

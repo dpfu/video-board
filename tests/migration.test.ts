@@ -7,7 +7,7 @@ it('opens a v1 project with docked modules while preserving media references, st
   const legacy: LegacyBoard = { ...base, version: 1 };
   const before = structuredClone(legacy);
   const migrated = migrateBoard(legacy);
-  expect(migrated.version).toBe(3);
+  expect(migrated.version).toBe(4);
   expect(migrated.videos).toEqual(before.videos);
   expect(migrated.stills).toEqual(before.stills);
   expect(migrated.tracks.map((t) => [t.kind, t.videoId, t.dock?.to, t.y])).toEqual([

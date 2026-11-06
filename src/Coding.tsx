@@ -1,5 +1,6 @@
 import { useState, type PointerEvent } from 'react';
-import { BookOpen, ChevronLeft, Film, Plus, Search, Scissors, X } from 'lucide-react';
+import { BookOpen, ChevronLeft, Film, LayoutGrid, Plus, Search, Scissors, X } from 'lucide-react';
+import { CODE_DRAG, QUOTATION_DRAG } from './spaces';
 import { IconButton } from './Icons';
 import { ModuleGrip, UndockButton, type DockControls } from './ModuleGrip';
 import { RangeEditor } from './RangeEditor';
@@ -47,6 +48,7 @@ export function Coding({
   onAssign,
   onReveal,
   onPlace,
+  onCollection,
   onDeleteQuotation,
   onDraft,
   onSaveDraft,
@@ -66,6 +68,7 @@ export function Coding({
   onAssign: (codeId: string) => void;
   onReveal: (q: Quotation) => void;
   onPlace: (q: Quotation) => void;
+  onCollection: (codeId: string) => void;
   onDeleteQuotation: (q: Quotation) => void;
   onDraft: (draft: RangeDraft) => void;
   onSaveDraft: () => void;
@@ -307,6 +310,12 @@ export function Coding({
                         </button>
                         <button
                           className="code-retrieve"
+                          draggable
+                          title="Drag onto the board to open a live collection"
+                          onDragStart={(event) => {
+                            event.dataTransfer.setData(CODE_DRAG, code.id);
+                            event.dataTransfer.effectAllowed = 'copy';
+                          }}
                           onClick={() => {
                             setFilter(code.id);
                             setSearch('');
@@ -318,6 +327,11 @@ export function Coding({
                             {board.quotations.filter((q) => q.codeIds.includes(code.id)).length}
                           </small>
                         </button>
+                        <IconButton
+                          icon={LayoutGrid}
+                          label={`Open live collection for ${code.name}`}
+                          onClick={() => onCollection(code.id)}
+                        />
                       </div>
                     ))}
                 </div>
@@ -373,6 +387,15 @@ export function Coding({
                     <button
                       key={q.id}
                       data-quotation-result={q.id}
+                      draggable
+                      title="Drag into a group or onto the board to gather evidence"
+                      onDragStart={(event) => {
+                        event.dataTransfer.setData(
+                          QUOTATION_DRAG,
+                          JSON.stringify({ quotationId: q.id }),
+                        );
+                        event.dataTransfer.effectAllowed = 'copy';
+                      }}
                       className={`retrieval-result ${target?.id === q.id ? 'is-active' : ''}`}
                       onClick={() => onReveal(q)}
                     >

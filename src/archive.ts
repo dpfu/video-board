@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import { reconcileSpaces } from './spaces';
 import { assetKeys, migrateBoard, type Board } from './model';
 import { validateBoard } from './validation';
 
@@ -34,7 +35,7 @@ export async function restoreArchive(file: Blob) {
     );
   }
   validateBoard(board);
-  const migrated = migrateBoard(board);
+  const migrated = reconcileSpaces(migrateBoard(board));
   const assets = new Map<string, Blob>();
   for (const key of assetKeys(migrated)) {
     const entry = zip.file(`assets/${key}`);

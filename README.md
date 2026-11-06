@@ -12,6 +12,9 @@ thumbnail, audio and shot-detection tracks; mark segments and rectangular image
 regions; add codes and memos; retrieve quotations and export PNG, CSV or a
 restorable project ZIP. Clip views share the original video data.
 
+Gather quotations into spatial groups, write a memo, and turn a group into a
+code. Live code collections follow its assignments while keeping your arrangement.
+
 Videos and analysis stay in your browser. This prototype is still changing;
 use ZIP backups for work you want to keep. Storage is specific to the site's
 origin and browser profile. Currently tested in Chromium.
@@ -35,7 +38,7 @@ npm run test:e2e:install # Install Chromium once
 npm run check           # Formatting, unit/storage tests, build, browser tests
 ```
 
-The suite has **53 Vitest checks and 18 Playwright workflows**, using generated
+The suite has **68 Vitest checks and 22 Playwright workflows**, using generated
 media and disposable browser storage. GitHub Actions runs it on pushes and pull
 requests; passing builds of `main` deploy to Pages. `npm run benchmark` measures
 board interactions separately.

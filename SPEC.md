@@ -1,6 +1,6 @@
 # Video Board — working specification
 
-Updated **5 November 2026**, preserving Daniel's 4 November decisions and the
+Updated **6 November 2026**, preserving Daniel's 4 November decisions and the
 5 November exploratory and comparative passes. This is the single
 home for product decisions, proposed behavior and open questions. Update it as
 the discussion develops; preserve corrections and their rationale. The
@@ -27,8 +27,9 @@ Keep it compact, responsive and methodologically useful: **select → code → m
 - No account, cloud processing or research-media upload is needed. Daniel
   authorized the public [GitHub repository](https://github.com/dpfu/video-board)
   and [GitHub Pages](https://dpfu.github.io/video-board/) on 4 November 2026.
-  The first application release is **0.0.1** / **v0.0.1**, explicitly experimental;
-  the project schema remains v3. Source code stays outside UNIverse; the local
+  The first application release is **0.0.1** / **v0.0.1**, explicitly experimental,
+  using project schema v3. The current development build uses v4 for evidence
+  spaces, with migration from v1–v3. Source code stays outside UNIverse; the local
   dossier pointer remains in the development notes.
 - Keep scope small. The original no-tests brief was superseded by Daniel's
   request for a focused suite. See [checks](docs/DEVELOPMENT.md#checks); browser checks use
@@ -38,7 +39,8 @@ Keep it compact, responsive and methodologically useful: **select → code → m
 
 Current release: **0.0.2** / **v0.0.2**, still experimental. It packages the
 5 November coding and code-quality improvements below; see the
-[changelog](CHANGELOG.md). Project schema v3 and shared original video data are
+[changelog](CHANGELOG.md). The development build now includes evidence spaces
+and project schema v4, with migration from v1–v3; shared original video data is
 unchanged.
 
 | Area | Status |
@@ -53,7 +55,73 @@ unchanged.
 | Free quotations, whole-video/clip/subsegment coding, region coding, memos and retrieval | Implemented: flat codes, compact assignment popovers, dockable Codes/Quotations/Sources module, ZIP restore and CSV export. |
 | Still-region selection | Implemented: manual, movable/resizable rectangles; retiming preserves geometry, identity, codes and memo across views. |
 | Board performance | Implemented: cached dock index/module rendering, viewport culling and bounded covers. Measured 31–32× faster pan/drag elapsed time on a 240-clip synthetic board; full protocol and smaller-board limits in development notes. |
+| Live code collections and provisional spatial groups | Implemented: linked mixed evidence, relative arrangement, memos, explicit promotion/reuse, virtualized previews and v4 ZIP/PNG support. |
 | Browser segmentation for proposing still regions | Deferred by Daniel for the first version; research retained below. |
+
+## Live collections and spatial coding · 6 November 2026
+
+Daniel selected two directions for implementation: live collections of a code's
+quotations, and developing codes by arranging evidence into provisional groups.
+The implementation goal is a complete small workflow from uncoded evidence to
+a named code and an automatically updated collection. These are linked views of
+existing quotations; original media and analytical occurrences stay shared.
+
+**Implemented plan:**
+
+1. Add movable, resizable, dockable evidence spaces to the board. A provisional
+   **group** has a name, memo and manually selected quotation references, each
+   with a position relative to the group. Moving the group moves its contents;
+   resizing preserves their arrangement. Groups can overlap in membership.
+2. A **live collection** references one existing code. Its members are derived
+   from current assignments across whole videos, ranges, stills and regions.
+   Keep the positions of existing members; place new matches in free slots.
+   Removing an assignment removes its view; code renaming/retiming is reflected
+   immediately. A collection memo belongs to that collection, separate from the
+   shared code definition and quotation memos.
+3. Drag a code from Codes onto the board, or use its collection button. Create
+   groups from a toolbar action. Add evidence through a searchable picker, by
+   dragging quotation rows, or by dragging evidence between spaces. Arrange
+   tiles with a drag handle; keyboard movement and buttons provide alternatives.
+   Moving evidence between manual groups changes membership; dragging from a
+   live collection keeps its original assignment. Dropping evidence into a live
+   collection explicitly assigns its code. Mere overlap with a frame never codes.
+4. **Turn into code** explicitly creates or reuses a trimmed, case-insensitive
+   code name, assigns it once to every member, and turns that group into a live
+   collection. Reusing a code also reveals its existing matches. This is one
+   undoable action. Unnamed or empty groups cannot be promoted. Deleting a space
+   never deletes quotations or codes; removing a tile from a live collection
+   explicitly removes that code assignment, with a clearly labelled action.
+5. Evidence tiles show the source, scope, source time and shared coding, with
+   frame/region previews and one muted clip preview at a time. Selecting/coding
+   a tile uses the existing quotation; source reveal opens its full context.
+   Bound preview decoding and render only the visible portion of large spaces.
+6. Introduce project schema v4 with an empty-space migration from v1–v3. Preserve
+   IDs, media bytes, region geometry and historical assignments. Validate space
+   references and coordinates before atomic ZIP restore. Include spaces, memos
+   and arrangements in local persistence/Undo/ZIP and in the board PNG. CSV
+   continues to export actual quotations and assignments, without duplicate rows
+   for their additional views.
+7. Verify membership reconciliation, promotion/reuse, layout, deletion and legacy
+   migrations with focused tests. Exercise code drag, grouping, arranging,
+   promotion, new/removing assignments, retimed regions, Undo, reload and fresh
+   ZIP restore with generated video in isolated Chromium. Inspect the resulting
+   board and PNG. Run the complete check suite and push to the existing GitHub
+   repository; keep experimental release history intact.
+
+This adds a shared evidence-space model rather than a second quotation store.
+Nested groups, code hierarchies, automatic spatial inference, synchronized
+comparison and segmentation are outside this iteration.
+
+Verification: **68 unit/storage checks and 22 real-media Chromium workflows**.
+The new workflows cover native code drag, manual arrangement, atomic promotion
+and Undo, assignment/rename updates, closing collections without deleting data,
+retimed regions, exact preview/source recovery after closing a still view,
+code reuse, PNG and fresh-session ZIP restore. A 250-quotation collection keeps
+fewer than 18 tiles mounted while scrolling, with one pinned preview. A separate
+walkthrough verified quotation-list dragging, manual group transfers and
+dragging evidence onto empty board space. Original video bytes and the four
+analytical quotation identities survived. Detailed evidence and compatibility
+limits live in the development notes; release history stays unchanged.
 
 ## Exploratory pass · 5 November 2026
 

@@ -9,6 +9,7 @@ import {
   Film,
   FolderOpen,
   Hand,
+  FolderPlus,
   ImageDown,
   LoaderCircle,
   Minus,
@@ -25,6 +26,18 @@ import { Track } from './Track';
 import { Clip } from './Clip';
 import { Coding, type RangeDraft } from './Coding';
 import { CodePopover } from './CodePopover';
+import { EvidenceSpace } from './EvidenceSpace';
+import {
+  addEvidence,
+  CODE_DRAG,
+  freeSpacePosition,
+  moveEvidence,
+  promoteGroup,
+  readEvidenceDrag,
+  reconcileSpaces,
+  removeEvidence,
+  type EvidenceDrag,
+} from './spaces';
 import { csvExport, editQuotation, quotation } from './analysis';
 import { shotAt, shotRanges } from './scenes';
 import { useBoardMotion } from './motion';
@@ -66,6 +79,7 @@ import {
   type Quotation,
   type Rect,
   type StillCard,
+  type SpaceCard,
   type TrackCard,
   type TrackKind,
   type VideoCard,
@@ -115,7 +129,10 @@ export function App() {
   const [drawing, setDrawing] = useState<string | null>(null);
   const [draft, setDraft] = useState<RangeDraft | null>(null);
   const [popover, setPopover] = useState<{ x: number; y: number } | null>(null);
-  const [preview, setPreview] = useState<{ id: string; pinned: boolean } | null>(null);
+  const [preview, setPreview] = useState<{ id: string; pinned: boolean; moduleId?: string } | null>(
+    null,
+  );
+  const [spaceEvidence, setSpaceEvidence] = useState<Record<string, string[]>>({});
   const [viewport, setViewport] = useState({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -146,7 +163,7 @@ export function App() {
   }
   const docks = useMemo(
     () => dockIndex(board),
-    [board.videos, board.stills, board.tracks, board.clips, board.panels],
+    [board.videos, board.stills, board.tracks, board.clips, board.panels, board.spaces],
   );
   const sourceById = useMemo(() => new Map(board.videos.map((v) => [v.id, v])), [board.videos]);
   const quoteById = useMemo(
@@ -160,7 +177,11 @@ export function App() {
     return counts;
   }, [board.stills, board.clips]);
   const motion = useBoardMotion(board, stage, loaded, () => !!gesture.current);
-  const posters = useClipPosters(board, assets.current, viewport, epoch.current);
+  const evidenceIds = useMemo(
+    () => [...new Set(Object.values(spaceEvidence).flat())],
+    [spaceEvidence],
+  );
+  const posters = useClipPosters(board, assets.current, viewport, epoch.current, evidenceIds);
   useEffect(() => {
     if (!stage.current) return;
     const observer = new ResizeObserver(([entry]) =>
@@ -171,12 +192,20 @@ export function App() {
   }, []);
   useEffect(() => () => clearTimeout(hoverTimer.current), []);
   useEffect(() => {
+    if (!preview?.moduleId) return;
+    const space = board.spaces.find((space) => space.id === preview.moduleId);
+    if (!space?.items.some((item) => `${space.id}/${item.quotationId}` === preview.id))
+      setPreview(null);
+  }, [board.spaces, preview]);
+  useEffect(() => {
     if (stage.current) stage.current.inert = editingLocked;
   }, [editingLocked]);
 
   function change(update: (board: Board) => Board) {
-    const next = update(current.current);
+    let next = update(current.current);
     if (next === current.current) return;
+    if (next.quotations !== current.current.quotations || next.codes !== current.current.codes)
+      next = reconcileSpaces(next);
     current.current = next;
     setSaving('saving');
     setBoard(next);
@@ -274,6 +303,77 @@ export function App() {
   function patchQuotation(id: string, patch: Partial<Quotation>) {
     change((b) => editQuotation(b, id, patch));
   }
+  function createSpace(codeId?: string, point?: Point, evidence?: EvidenceDrag) {
+    if (editingLocked) return;
+    const b = current.current;
+    if (codeId && !b.codes.some((code) => code.id === codeId)) return;
+    const existing = codeId && b.spaces.find((space) => space.codeId === codeId);
+    if (existing) {
+      setSelected(existing.id);
+      exposeModule(existing.id, 1);
+      return;
+    }
+    checkpoint();
+    const width = 700,
+      height = 540;
+    const space: SpaceCard = {
+      id: crypto.randomUUID(),
+      kind: 'space',
+      name: '',
+      memo: '',
+      codeId,
+      items: [],
+      width,
+      height,
+      ...freeSpacePosition(
+        boardBoxes(b),
+        point || {
+          x: (80 - b.camera.x) / b.camera.scale,
+          y: (50 - b.camera.y) / b.camera.scale,
+        },
+        width,
+        height,
+      ),
+      z: topZ(b),
+    };
+    change((before) => {
+      const next = { ...before, spaces: [...before.spaces, space] };
+      return evidence
+        ? addEvidence(next, space.id, evidence.quotationId, undefined, evidence.spaceId)
+        : reconcileSpaces(next);
+    });
+    setSelected(space.id);
+    setPopover(null);
+    exposeModule(space.id, 1);
+  }
+  function patchSpace(id: string, patch: Partial<Pick<SpaceCard, 'name' | 'memo'>>) {
+    change((b) => {
+      const space = b.spaces.find((space) => space.id === id);
+      if (space?.codeId && patch.name !== undefined) {
+        const name = patch.name.trim();
+        if (!name) return b;
+        return {
+          ...b,
+          codes: b.codes.map((code) =>
+            code.id === space.codeId ? { ...code, name: patch.name! } : code,
+          ),
+        };
+      }
+      return {
+        ...b,
+        spaces: b.spaces.map((space) => (space.id === id ? { ...space, ...patch } : space)),
+      };
+    });
+  }
+  function reportEvidence(spaceId: string, ids: string[]) {
+    setSpaceEvidence((previous) => {
+      if ((previous[spaceId] || []).join('|') === ids.join('|')) return previous;
+      const next = { ...previous };
+      if (ids.length) next[spaceId] = ids;
+      else delete next[spaceId];
+      return next;
+    });
+  }
   function addCode(name: string) {
     const trimmed = name.trim();
     if (!trimmed || draft) return;
@@ -308,7 +408,7 @@ export function App() {
         : [...q.codeIds, codeId],
     });
   }
-  function requestHover(id: string, hover: boolean) {
+  function requestHover(id: string, hover: boolean, moduleId?: string) {
     clearTimeout(hoverTimer.current);
     if (!hover) {
       setPreview((p) => (p?.id === id && !p.pinned ? null : p));
@@ -316,7 +416,7 @@ export function App() {
     }
     if (gesture.current || operation) return;
     hoverTimer.current = setTimeout(() => {
-      if (!gesture.current) setPreview((p) => (p?.pinned ? p : { id, pinned: false }));
+      if (!gesture.current) setPreview((p) => (p?.pinned ? p : { id, pinned: false, moduleId }));
     }, 120);
   }
   function stopHover() {
@@ -482,27 +582,30 @@ export function App() {
               const track = b.tracks.find((t) => t.id === card.id),
                 video = b.videos.some((v) => v.id === card.id),
                 panel = b.panels.some((p) => p.id === card.id),
+                evidenceSpace = b.spaces.some((s) => s.id === card.id),
                 clip = b.clips.some((c) => c.id === card.id);
               return {
                 ...card,
                 width: clamp(
                   (g.origin.width || 300) + dx,
-                  track ? 240 : panel || video || clip ? 320 : 280,
+                  evidenceSpace ? 400 : track ? 240 : panel || video || clip ? 320 : 280,
                   1600,
                 ),
                 height: clamp(
                   (g.origin.height || 100) + dy,
-                  track
-                    ? track.kind === 'cuts'
-                      ? 96
-                      : 72
-                    : panel
-                      ? 280
-                      : clip
-                        ? 230
-                        : video
-                          ? 190
-                          : 110,
+                  evidenceSpace
+                    ? 320
+                    : track
+                      ? track.kind === 'cuts'
+                        ? 96
+                        : 72
+                      : panel
+                        ? 280
+                        : clip
+                          ? 230
+                          : video
+                            ? 190
+                            : 110,
                   track ? 600 : 1200,
                 ),
               };
@@ -639,17 +742,18 @@ export function App() {
     };
     change((b) => ({ ...b, camera }));
   }
-  function exposeModule(id: string) {
+  function exposeModule(id: string, preferredScale?: number) {
     const b = current.current,
       box = boardBoxes(b).find((c) => c.id === id),
       viewport = stage.current?.getBoundingClientRect();
     if (!box || !viewport) return;
     const c = b.camera,
       margin = 24;
-    // Only zoom out when the requested view cannot fit at the current scale.
+    // Source reveal keeps the current scale. Explicitly opening a space starts
+    // at a readable scale, reduced only when its frame cannot fit.
     const scale = clamp(
       Math.min(
-        c.scale,
+        preferredScale ?? c.scale,
         (viewport.width - margin * 2) / box.width,
         (viewport.height - margin * 2) / box.height,
       ),
@@ -1108,6 +1212,7 @@ export function App() {
           tracks: b.tracks.filter((t) => t.id !== id),
           clips: b.clips.filter((c) => c.id !== id),
           panels: b.panels.filter((p) => p.id !== id),
+          spaces: b.spaces.filter((s) => s.id !== id),
         },
         (c) => (c.dock?.to === id ? { ...c, dock: undefined } : c),
       ),
@@ -1115,7 +1220,7 @@ export function App() {
     setSelected(null);
     setDrawing(null);
     setPopover(null);
-    setPreview((p) => (p?.id === id ? null : p));
+    setPreview((p) => (p?.id === id || p?.moduleId === id ? null : p));
     setRemoved(true);
   }
   function jump(still: Pick<StillCard, 'videoId' | 'time'>) {
@@ -1224,6 +1329,7 @@ export function App() {
     const keep = new Set(moving);
     if (selected) keep.add(selected);
     if (preview) keep.add(preview.id);
+    if (preview?.moduleId) keep.add(preview.moduleId);
     if (focusedModule) keep.add(focusedModule);
     return visibleModuleIds(board, viewport, keep);
   }, [
@@ -1232,11 +1338,13 @@ export function App() {
     board.tracks,
     board.clips,
     board.panels,
+    board.spaces,
     board.camera,
     viewport,
     selected,
     moving,
     preview?.id,
+    preview?.moduleId,
     focusedModule,
   ]);
   const visibleKey = [...visible].sort().join('|');
@@ -1545,6 +1653,7 @@ export function App() {
               onAssign={assignCode}
               onReveal={reveal}
               onPlace={placeClip}
+              onCollection={(codeId) => createSpace(codeId)}
               onDeleteQuotation={deleteQuotation}
               onDraft={setDraft}
               onSaveDraft={saveSegment}
@@ -1562,6 +1671,86 @@ export function App() {
             />
           </article>
         ))}
+        {board.spaces
+          .filter((space) => visible.has(space.id))
+          .map((space) => (
+            <article
+              key={space.id}
+              className={`board-card space-card ${moduleClass(space.id)}`}
+              data-module-id={space.id}
+              data-space-id={space.id}
+              data-space-code={space.codeId}
+              data-docked-to={space.dock?.to}
+              style={{
+                left: space.x,
+                top: space.y,
+                width: space.width,
+                height: space.height,
+                zIndex: space.z,
+              }}
+              onPointerDown={() => setSelected(space.id)}
+            >
+              <EvidenceSpace
+                space={space}
+                board={board}
+                urls={urls}
+                posters={posters}
+                activeQuotation={activeQuotation}
+                preview={preview}
+                dockControls={controlsFor(space.id)}
+                onDrag={(event) => begin(event, 'move', space.id)}
+                onClose={() => remove(space.id)}
+                onEditStart={checkpoint}
+                onPatch={(patch) => patchSpace(space.id, patch)}
+                onPromote={() => {
+                  checkpoint();
+                  stopHover();
+                  change((b) => promoteGroup(b, space.id));
+                  motion.highlight(space.id);
+                }}
+                onAdd={(id, point, from) => {
+                  if (!current.current.quotations.some((q) => q.id === id)) return;
+                  checkpoint();
+                  stopHover();
+                  change((b) => addEvidence(b, space.id, id, point, from));
+                  setSelected(space.id);
+                }}
+                onRemove={(id) => {
+                  checkpoint();
+                  setPreview(null);
+                  change((b) => removeEvidence(b, space.id, id));
+                }}
+                onMove={(id, point) => change((b) => moveEvidence(b, space.id, id, point))}
+                onSelect={(id) => {
+                  setSelected(space.id);
+                  setActiveQuotation(id);
+                }}
+                onCode={showCoding}
+                onReveal={(id) => {
+                  const q = current.current.quotations.find((q) => q.id === id);
+                  if (q) reveal(q);
+                }}
+                onPreview={(id, hover, pin) => {
+                  const key = `${space.id}/${id}`;
+                  if (pin) {
+                    clearTimeout(hoverTimer.current);
+                    setPreview({ id: key, pinned: true, moduleId: space.id });
+                  } else requestHover(key, hover, space.id);
+                }}
+                onStop={() => {
+                  clearTimeout(hoverTimer.current);
+                  setPreview(null);
+                }}
+                onVisible={(ids) => reportEvidence(space.id, ids)}
+              />
+              <button
+                type="button"
+                className="resize-handle"
+                aria-label="Resize evidence space"
+                onPointerDown={(event) => begin(event, 'resize', space.id)}
+              />
+            </article>
+          ))}
       </>
     ),
     [
@@ -1570,6 +1759,7 @@ export function App() {
       board.tracks,
       board.clips,
       board.panels,
+      board.spaces,
       board.quotations,
       board.codes,
       urls,
@@ -1671,6 +1861,12 @@ export function App() {
             disabled={editingLocked}
             onClick={() => openCodes(true)}
           />
+          <IconButton
+            icon={FolderPlus}
+            label="New evidence group"
+            disabled={editingLocked}
+            onClick={() => createSpace()}
+          />
           <span className="toolbar-divider" />
           <IconButton
             className="add-video"
@@ -1725,10 +1921,19 @@ export function App() {
           setDragOver(false);
           const box = event.currentTarget.getBoundingClientRect(),
             c = current.current.camera;
-          void importVideos(Array.from(event.dataTransfer.files), {
+          const point = {
             x: (event.clientX - box.left - c.x) / c.scale,
             y: (event.clientY - box.top - c.y) / c.scale,
-          });
+          };
+          const codeId = event.dataTransfer.getData(CODE_DRAG);
+          if (codeId) createSpace(codeId, point);
+          else {
+            const evidence = readEvidenceDrag(event.dataTransfer);
+            if (evidence && current.current.quotations.some((q) => q.id === evidence.quotationId))
+              createSpace(undefined, point, evidence);
+            else if (event.dataTransfer.files.length)
+              void importVideos(Array.from(event.dataTransfer.files), point);
+          }
         }}
       >
         <div
@@ -1739,7 +1944,7 @@ export function App() {
         >
           {modules}
         </div>
-        {!board.videos.length && (
+        {!board.videos.length && !board.spaces.length && (
           <div className="empty-board">
             <div className="empty-board__icon">
               <Film size={34} strokeWidth={1.2} />

@@ -11,6 +11,7 @@ export function useClipPosters(
   assets: Map<string, Blob>,
   viewport: { width: number; height: number },
   generation: number,
+  evidenceIds: string[] = [],
 ) {
   const cache = useRef(new Map<string, string>()),
     failed = useRef(new Set<string>());
@@ -20,8 +21,24 @@ export function useClipPosters(
       quotes = new Map(board.quotations.map((q) => [q.id, q]));
     const seen = new Set<string>(),
       requests: { key: string; sourceId: string; time: number }[] = [];
+    for (const id of evidenceIds) {
+      const q = quotes.get(id);
+      if (!q || !sources.has(q.sourceId)) continue;
+      if (
+        (q.kind === 'frame' || q.kind === 'region') &&
+        board.stills.some((s) => s.quotationId === (q.kind === 'region' ? q.parentId : q.id))
+      )
+        continue;
+      const key = posterKey(q.sourceId, q.start);
+      if (!seen.has(key)) {
+        seen.add(key);
+        requests.push({ key, sourceId: q.sourceId, time: q.start });
+      }
+      if (requests.length === 48) break;
+    }
     const { x, y, scale } = board.camera;
     for (const c of board.clips) {
+      if (requests.length === 48) break;
       const source = sources.get(c.videoId),
         q = quotes.get(c.quotationId);
       if (
@@ -41,7 +58,15 @@ export function useClipPosters(
       if (requests.length === 48) break;
     }
     return requests;
-  }, [board.videos, board.quotations, board.clips, board.camera, viewport]);
+  }, [
+    board.videos,
+    board.quotations,
+    board.clips,
+    board.stills,
+    board.camera,
+    viewport,
+    evidenceIds.join('|'),
+  ]);
   const key = requests.map((r) => r.key).join('|');
   useEffect(() => {
     for (const url of cache.current.values()) URL.revokeObjectURL(url);

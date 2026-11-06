@@ -9,7 +9,7 @@ import { boardFixture } from './board';
 describe('project validation', () => {
   it('accepts all supported versions without changing the input', () => {
     const current = boardFixture();
-    const { quotations: _q, codes: _c, clips: _v, panels: _p, ...base } = current;
+    const { quotations: _q, codes: _c, clips: _v, panels: _p, spaces: _s, ...base } = current;
     const v2: V2Board = { ...base, version: 2 };
     const { tracks: _t, ...old } = v2;
     const v1: LegacyBoard = { ...old, version: 1 };
@@ -21,7 +21,7 @@ describe('project validation', () => {
     }
   });
 
-  it.each(['videos', 'stills', 'tracks', 'clips', 'panels', 'quotations', 'codes'])(
+  it.each(['videos', 'stills', 'tracks', 'clips', 'panels', 'spaces', 'quotations', 'codes'])(
     'rejects null and sparse %s entries with an actionable error',
     (field) => {
       for (const entries of [[null], new Array(1)]) {

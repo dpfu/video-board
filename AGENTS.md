@@ -20,6 +20,9 @@ rather than starting parallel plan files. In particular, coded still
 regions remain retimeable with geometry fixed relative to the image; the earlier
 freeze-after-coding suggestion was rejected by Daniel.
 Region selection starts with manual rectangles; model segmentation is deferred.
+Daniel added live code collections and provisional spatial groups on 6 November
+2026. Keep their members as shared quotation references, promotion explicit and
+undoable, and schema v4 migration/backup coverage intact. See `SPEC.md`.
 
 Preserve local-first behavior and the separate `video-board` IndexedDB database.
 Use the compact graphite/grey modular design requested by Daniel, with Lucide

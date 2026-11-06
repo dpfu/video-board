@@ -1,4 +1,5 @@
-import type { Board } from './model';
+import type { Board, Quotation, SpaceCard } from './model';
+import { evidenceLabel, EVIDENCE_HEIGHT, EVIDENCE_WIDTH } from './spaces';
 import {
   boardBoxes,
   clamp,
@@ -22,6 +23,97 @@ async function loadImage(blob: Blob) {
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/** Fit the complete arrangement, including scrolled-out evidence, into its frame. */
+async function paintSpace(
+  ctx: CanvasRenderingContext2D,
+  space: SpaceCard,
+  board: Board,
+  imageFor: (q: Quotation) => Promise<HTMLImageElement>,
+) {
+  const code = board.codes.find((c) => c.id === space.codeId);
+  ctx.fillStyle = '#abb6c6';
+  ctx.font = '10px system-ui';
+  const memo = space.memo.split('\n');
+  ctx.fillText(memo[0] || '', space.x + 12, space.y + 47, space.width - 24);
+  ctx.fillText(memo[1] || '', space.x + 12, space.y + 63, space.width - 24);
+  ctx.fillStyle = code?.color || '#abb6c6';
+  ctx.fillText(
+    `${code ? 'LIVE COLLECTION' : 'PROVISIONAL GROUP'} · ${space.items.length} quotations`,
+    space.x + 12,
+    space.y + 91,
+    space.width - 24,
+  );
+  const width = Math.max(
+    space.width - 2,
+    ...space.items.map((item) => item.x + EVIDENCE_WIDTH + 12),
+  );
+  const height = Math.max(
+    space.height - 130,
+    ...space.items.map((item) => item.y + EVIDENCE_HEIGHT + 12),
+  );
+  const scale = Math.min(1, (space.width - 2) / width, (space.height - 130) / height);
+  ctx.save();
+  ctx.translate(space.x + 1, space.y + 111);
+  ctx.scale(scale, scale);
+  const quotes = new Map(board.quotations.map((q) => [q.id, q]));
+  const sources = new Map(board.videos.map((v) => [v.id, v]));
+  for (const item of space.items) {
+    const q = quotes.get(item.quotationId),
+      source = q && sources.get(q.sourceId);
+    if (!q || !source) continue;
+    const image = await imageFor(q);
+    const aspect = source.sourceWidth / source.sourceHeight;
+    const dw = Math.min(EVIDENCE_WIDTH - 2, 106 * aspect),
+      dh = Math.min(106, (EVIDENCE_WIDTH - 2) / aspect);
+    const ix = item.x + (EVIDENCE_WIDTH - dw) / 2,
+      iy = item.y + 22 + (106 - dh) / 2;
+    ctx.fillStyle = '#363a40';
+    ctx.fillRect(item.x, item.y, EVIDENCE_WIDTH, EVIDENCE_HEIGHT);
+    ctx.strokeStyle = '#656e7d';
+    ctx.strokeRect(item.x, item.y, EVIDENCE_WIDTH, EVIDENCE_HEIGHT);
+    ctx.fillStyle = '#abb6c6';
+    ctx.font = '9px system-ui';
+    ctx.fillText(
+      q.kind === 'region'
+        ? 'Region'
+        : q.kind === 'frame'
+          ? 'Still'
+          : q.kind === 'range'
+            ? 'Segment'
+            : 'Video',
+      item.x + 7,
+      item.y + 15,
+    );
+    ctx.fillStyle = '#202227';
+    ctx.fillRect(item.x + 1, item.y + 22, EVIDENCE_WIDTH - 2, 106);
+    ctx.drawImage(image, ix, iy, dw, dh);
+    if (q.rect) {
+      ctx.strokeStyle = '#e2cf9a';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(ix + q.rect.x * dw, iy + q.rect.y * dh, q.rect.width * dw, q.rect.height * dh);
+    }
+    ctx.fillStyle = '#e1e5ec';
+    ctx.font = '11px system-ui';
+    ctx.fillText(evidenceLabel(q), item.x + 7, item.y + 145, EVIDENCE_WIDTH - 14);
+    ctx.fillStyle = '#a5b2c5';
+    ctx.font = '8px system-ui';
+    ctx.fillText(
+      `${source.name} · ${timecode(q.start)}${q.kind === 'range' || q.kind === 'video' ? `–${timecode(q.end)}` : ''}`,
+      item.x + 7,
+      item.y + 162,
+      EVIDENCE_WIDTH - 14,
+    );
+    ctx.fillStyle = code?.color || '#c0cfe4';
+    ctx.fillText(
+      q.codeIds.map((id) => board.codes.find((c) => c.id === id)?.name || '').join(' · '),
+      item.x + 7,
+      item.y + 184,
+      EVIDENCE_WIDTH - 14,
+    );
+  }
+  ctx.restore();
 }
 
 // Paint the full layout model, including detached scrubbers, independent of viewport.
@@ -73,16 +165,36 @@ export async function exportBoard(
     ctx.stroke();
   }
   ctx.setLineDash([]);
+  const evidenceImages = new Map<string, Promise<HTMLImageElement>>();
+  const imageFor = (q: Quotation) => {
+    const frame = board.stills.find(
+      (s) => s.quotationId === (q.kind === 'region' ? q.parentId : q.id),
+    );
+    const key = frame ? stillAssetId(frame) : `${q.sourceId}:${q.start}`;
+    let image = evidenceImages.get(key);
+    if (!image) {
+      image = (async () => {
+        const still = frame && assets.get(stillAssetId(frame));
+        if (still) return loadImage(still);
+        const original = assets.get(q.sourceId);
+        if (!original) throw new Error('An evidence source video is missing.');
+        return loadImage((await captureFrame(original, q.start, { width: 320 })).blob);
+      })();
+      evidenceImages.set(key, image);
+    }
+    return image;
+  };
   for (const card of [...boxes].sort((a, b) => a.z - b.z)) {
     const video = board.videos.find((v) => v.id === card.id),
       still = board.stills.find((s) => s.id === card.id),
       track = board.tracks.find((t) => t.id === card.id),
       clip = board.clips.find((c) => c.id === card.id),
-      panel = board.panels.find((p) => p.id === card.id);
+      panel = board.panels.find((p) => p.id === card.id),
+      space = board.spaces.find((s) => s.id === card.id);
     const source =
       video ||
       board.videos.find((v) => v.id === (still?.videoId || track?.videoId || clip?.videoId));
-    if (!source && !panel) continue;
+    if (!source && !panel && !space) continue;
     const quote = board.quotations.find(
       (q) =>
         q.id ===
@@ -102,19 +214,32 @@ export async function exportBoard(
     ctx.fillStyle = '#e0e3e9';
     ctx.font = '10px system-ui';
     ctx.fillText(
-      panel
-        ? 'Codes & quotations'
-        : video
-          ? video.name
-          : still
-            ? timecode(still.time)
-            : clip
-              ? quote?.title || 'Clip'
-              : `${track!.kind === 'filmstrip' ? 'Frames' : track!.kind === 'cuts' ? 'Cuts' : 'Audio'} · ${source!.name}`,
+      space
+        ? board.codes.find((code) => code.id === space.codeId)?.name ||
+            space.name ||
+            'Untitled group'
+        : panel
+          ? 'Codes & quotations'
+          : video
+            ? video.name
+            : still
+              ? timecode(still.time)
+              : clip
+                ? quote?.title || 'Clip'
+                : `${track!.kind === 'filmstrip' ? 'Frames' : track!.kind === 'cuts' ? 'Cuts' : 'Audio'} · ${source!.name}`,
       card.x + 9,
       card.y + 18,
       card.width - 18,
     );
+    if (space) {
+      await paintSpace(ctx, space, board, imageFor);
+      ctx.restore();
+      ctx.strokeStyle = '#686c74';
+      ctx.beginPath();
+      ctx.roundRect(card.x, card.y, card.width, card.height, 6);
+      ctx.stroke();
+      continue;
+    }
     if (panel) {
       let y = card.y + HEADER + 18;
       ctx.fillStyle = '#b4c7df';

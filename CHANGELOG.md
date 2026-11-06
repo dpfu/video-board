@@ -3,6 +3,35 @@
 Video Board is an early experimental build of a local-first workbench for
 qualitative video analysis.
 
+## Unreleased
+
+### Added
+
+- Live code collections: drag a code onto the board or open it from Codes to
+  gather its videos, segments, stills and regions. New assignments appear
+  automatically; existing evidence keeps its arranged position.
+- Provisional spatial groups with names, memos, searchable evidence picking and
+  free tile placement. Drag quotations between groups or onto empty board space;
+  arrow keys provide precise placement. Moving/resizing a group preserves its
+  contents' relative positions.
+- **Turn into code** assigns a new or existing code to the group's members and
+  turns it into a live collection in one undoable action. Extra views share
+  quotations, frame changes, coding and original media.
+- Compact evidence tiles with region outlines, source context, shared coding
+  controls and one muted video preview at a time. Large collections render their
+  visible tiles; covers share the existing bounded capture cache.
+- Groups, collection memos and arrangements in local storage, Undo and project
+  ZIPs. PNG export fits each complete arrangement into its frame, including
+  scrolled-out items. Additional views do not duplicate CSV quotation rows.
+- 15 additional unit/storage checks and four real-media browser workflows,
+  bringing the suite to **90 checks**.
+
+### Compatibility
+
+The project format is now **schema v4**. Existing v1–v3 projects migrate without
+changing their media or quotation identities. New v4 backups require this build
+or later; the tagged 0.0.2 release cannot read them.
+
 ## [0.0.2](https://github.com/dpfu/video-board/releases/tag/v0.0.2) — 2026-11-05
 
 ### Fixed

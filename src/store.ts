@@ -1,5 +1,6 @@
 import { openDB, type DBSchema } from 'idb';
 import { assetKeys, migrateBoard, type Board, type PersistedBoard } from './model';
+import { reconcileSpaces } from './spaces';
 
 interface VideoBoardDB extends DBSchema {
   boards: { key: string; value: PersistedBoard };
@@ -36,7 +37,7 @@ export async function commitTransaction<T>(
 export async function loadBoard() {
   const db = await database;
   const saved = await db.get('boards', 'current');
-  const board = saved ? migrateBoard(saved) : undefined;
+  const board = saved ? reconcileSpaces(migrateBoard(saved)) : undefined;
   const assets = new Map<string, Blob>();
   if (board) {
     const keys = assetKeys(board);

@@ -46,37 +46,49 @@ export type Quotation = {
 export type Code = { id: string; name: string; color: string; definition: string };
 export type ClipCard = Card & { videoId: string; quotationId: string; time: number; rate?: number };
 export type CodesCard = Card & { kind: 'codes'; height: number };
+export type SpaceItem = Point & { quotationId: string };
+export type SpaceCard = Card & {
+  kind: 'space';
+  height: number;
+  name: string;
+  memo: string;
+  codeId?: string;
+  items: SpaceItem[];
+};
 export type TrackKind = 'filmstrip' | 'waveform' | 'cuts';
 export type TrackCard = Card & { videoId: string; kind: TrackKind; height: number };
 export type Board = {
-  version: 3;
+  version: 4;
   name: string;
   videos: VideoCard[];
   stills: StillCard[];
   tracks: TrackCard[];
   clips: ClipCard[];
   panels: CodesCard[];
+  spaces: SpaceCard[];
   quotations: Quotation[];
   codes: Code[];
   camera: Camera;
 };
 
-export type V2Board = Omit<Board, 'version' | 'clips' | 'panels' | 'quotations' | 'codes'> & {
+export type V3Board = Omit<Board, 'version' | 'spaces'> & { version: 3 };
+export type V2Board = Omit<V3Board, 'version' | 'clips' | 'panels' | 'quotations' | 'codes'> & {
   version: 2;
 };
 export type LegacyBoard = Omit<V2Board, 'version' | 'tracks'> & { version: 1 };
-export type PersistedBoard = Board | V2Board | LegacyBoard;
-export type ModuleCard = VideoCard | StillCard | TrackCard | ClipCard | CodesCard;
+export type PersistedBoard = Board | V3Board | V2Board | LegacyBoard;
+export type ModuleCard = VideoCard | StillCard | TrackCard | ClipCard | CodesCard | SpaceCard;
 export const HEADER = 28;
 export const DOCK_GAP = 5;
 export const emptyBoard = (): Board => ({
-  version: 3,
+  version: 4,
   name: 'Untitled board',
   videos: [],
   stills: [],
   tracks: [],
   clips: [],
   panels: [],
+  spaces: [],
   quotations: [],
   codes: [],
   camera: { x: 0, y: 0, scale: 1 },
@@ -111,6 +123,7 @@ export const allCards = (board: Board): ModuleCard[] => [
   ...board.tracks,
   ...board.clips,
   ...board.panels,
+  ...board.spaces,
 ];
 export const topZ = (board: Board) => Math.max(0, ...allCards(board).map((v) => v.z)) + 1;
 export function mapCards(board: Board, update: (card: ModuleCard) => ModuleCard): Board {
@@ -121,6 +134,7 @@ export function mapCards(board: Board, update: (card: ModuleCard) => ModuleCard)
     tracks: board.tracks.map((t) => update(t) as TrackCard),
     clips: board.clips.map((c) => update(c) as ClipCard),
     panels: board.panels.map((p) => update(p) as CodesCard),
+    spaces: board.spaces.map((s) => update(s) as SpaceCard),
   };
 }
 
@@ -154,18 +168,21 @@ export function boardBoxes(board: Board) {
       return video ? [{ ...clip, height: clipHeight(clip, video) }] : [];
     }),
     ...board.panels.map((panel) => ({ ...panel })),
+    ...board.spaces.map((space) => ({ ...space })),
   ];
 }
 
 /** v1 media IDs and still positions survive; embedded tracks become docked modules. */
-export function migrateBoard(saved: Board | V2Board | LegacyBoard): Board {
-  if (saved.version === 3) return saved;
+export function migrateBoard(saved: PersistedBoard): Board {
+  if (saved.version === 4) return saved;
+  if (saved.version === 3) return { ...saved, version: 4, spaces: [] };
   const board: Board = {
     ...saved,
-    version: 3,
+    version: 4,
     tracks: saved.version === 2 ? saved.tracks : [],
     clips: [],
     panels: [],
+    spaces: [],
     quotations: [],
     codes: [],
   };

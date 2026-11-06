@@ -10,6 +10,8 @@ import {
   type Quotation,
   type Rect,
   type StillCard,
+  type SpaceCard,
+  type SpaceItem,
   type TrackCard,
   type VideoCard,
 } from './model';
@@ -207,6 +209,28 @@ function isPanel(value: unknown): value is CodesCard {
   return isCard(value) && value.kind === 'codes' && bounded(value.height, 280, 1200);
 }
 
+function isSpaceItem(value: unknown): value is SpaceItem {
+  return (
+    record(value) &&
+    identifier(value.quotationId, 200) &&
+    bounded(value.x, 0, 1e7) &&
+    bounded(value.y, 0, 1e7)
+  );
+}
+
+function isSpace(value: unknown): value is SpaceCard {
+  return (
+    isCard(value) &&
+    value.kind === 'space' &&
+    bounded(value.width, 400, 2000) &&
+    bounded(value.height, 320, 1200) &&
+    text(value.name, 200) &&
+    text(value.memo) &&
+    (value.codeId === undefined || identifier(value.codeId)) &&
+    arrayOf(value.items, 100_000, isSpaceItem)
+  );
+}
+
 function register(ids: Set<string>, id: string, error: string) {
   if (ids.has(id)) throw new Error(error);
   ids.add(id);
@@ -232,7 +256,7 @@ export function validateBoard(value: unknown): asserts value is PersistedBoard {
   if (
     !record(value) ||
     typeof value.version !== 'number' ||
-    ![1, 2, 3].includes(value.version) ||
+    ![1, 2, 3, 4].includes(value.version) ||
     !text(value.name, 200) ||
     !record(value.camera) ||
     !bounded(value.camera.scale, 0.15, 3) ||
@@ -245,13 +269,17 @@ export function validateBoard(value: unknown): asserts value is PersistedBoard {
   const tracks =
     value.version >= 2 ? list(value.tracks, 10_000, isTrack, 'Invalid scrubber module.') : [];
   const clips =
-    value.version === 3 ? list(value.clips, 10_000, isClip, 'Invalid linked clip view.') : [];
+    value.version >= 3 ? list(value.clips, 10_000, isClip, 'Invalid linked clip view.') : [];
   const panels =
-    value.version === 3 ? list(value.panels, 100, isPanel, 'Invalid codes module.') : [];
+    value.version >= 3 ? list(value.panels, 100, isPanel, 'Invalid codes module.') : [];
+  const spaces =
+    value.version === 4
+      ? list(value.spaces, 1000, isSpace, 'Invalid evidence space in project backup.')
+      : [];
   const codes =
-    value.version === 3 ? list(value.codes, 10_000, isCode, 'Invalid code in project backup.') : [];
+    value.version >= 3 ? list(value.codes, 10_000, isCode, 'Invalid code in project backup.') : [];
   const quotes =
-    value.version === 3
+    value.version >= 3
       ? list(value.quotations, 100_000, isQuotation, 'Invalid quotation in project backup.')
       : [];
   const sources = new Map(videos.map((video) => [video.id, video]));
@@ -267,7 +295,7 @@ export function validateBoard(value: unknown): asserts value is PersistedBoard {
       register(moduleIds, key, 'Duplicate media identifier.');
     }
   }
-  for (const card of [...stills, ...tracks, ...clips, ...panels])
+  for (const card of [...stills, ...tracks, ...clips, ...panels, ...spaces])
     register(moduleIds, card.id, 'Duplicate module identifier.');
   for (const code of codes) register(codeIds, code.id, 'Duplicate code identifier.');
   for (const quote of quotes) {
@@ -305,7 +333,7 @@ export function validateBoard(value: unknown): asserts value is PersistedBoard {
       originalAssets.has(stillAssetId(still))
     )
       throw new Error('Invalid linked still in project backup.');
-    if (value.version !== 3) continue;
+    if (value.version < 3) continue;
     const frame = still.quotationId === undefined ? undefined : quoteById.get(still.quotationId);
     if (
       !frame ||
@@ -334,7 +362,17 @@ export function validateBoard(value: unknown): asserts value is PersistedBoard {
       throw new Error('Invalid linked clip view.');
     }
   }
-  if (value.version === 3)
+  for (const space of spaces) {
+    if (space.codeId && !codeIds.has(space.codeId))
+      throw new Error('Invalid collection code in project backup.');
+    const members = new Set<string>();
+    for (const item of space.items) {
+      if (!quoteById.has(item.quotationId))
+        throw new Error('Missing evidence quotation in project backup.');
+      register(members, item.quotationId, 'Duplicate evidence in a space.');
+    }
+  }
+  if (value.version >= 3)
     for (const source of videos) {
       const quote = quoteById.get(sourceQuotationId(source.id));
       if (
@@ -348,11 +386,16 @@ export function validateBoard(value: unknown): asserts value is PersistedBoard {
       }
     }
   const visible = new Map(
-    [...videos.filter((video) => !video.hidden), ...stills, ...tracks, ...clips, ...panels].map(
-      (card) => [card.id, card],
-    ),
+    [
+      ...videos.filter((video) => !video.hidden),
+      ...stills,
+      ...tracks,
+      ...clips,
+      ...panels,
+      ...spaces,
+    ].map((card) => [card.id, card]),
   );
-  const cards = [...videos, ...stills, ...tracks, ...clips, ...panels];
+  const cards = [...videos, ...stills, ...tracks, ...clips, ...panels, ...spaces];
   for (const card of cards)
     if (card.dock && (!visible.has(card.dock.to) || card.dock.to === card.id)) {
       throw new Error('Invalid module docking.');

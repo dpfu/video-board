@@ -4,7 +4,8 @@ A small, local-first experiment for exploring short videos on a spatial board.
 The first iteration focuses on mouse scrubbing and **linked stills**: independent
 images whose source video and frame timestamp remain editable. The current
 prototype also supports source-linked clip views, free quotations, manual image
-regions, codes, memos and retrieval.
+regions, codes, memos, retrieval, live code collections and provisional spatial
+groups.
 
 Product decisions and the evolving plan live in [SPEC.md](../SPEC.md), including
 linked clips, free quotations, coding, editable-frame rectangular regions and
@@ -40,7 +41,7 @@ For a shorter iteration, use `npm test` or `npm run test:watch`; `npm run test:e
 builds and runs just the browser workflows. Browser tests start a separate server
 on **4193** and use fresh contexts, leaving the working board on **5193** alone.
 
-- **53 Vitest checks:** group movement, detaching, independent resizing, docking
+- **68 Vitest checks:** group movement, detaching, independent resizing, docking
   on four sides and at different zoom levels, legacy v1 migration, persistence
   and atomic rollback after a simulated storage failure; native FFmpeg score
   parity on 8/10-bit sequences, reusable buffers, geometry changes, 16-bit
@@ -50,8 +51,10 @@ on **4193** and use fresh contexts, leaving the working board on **5193** alone.
   to the underlying evidence; immutable Codes panel layout, typed archive shapes,
   byte-identical ZIP roundtrips without IndexedDB, shared frame/asset consistency,
   12,000-deep quotation chains/cycle rejection, worker construction/posting/error/
-  progress/abort cleanup and native/fallback playback-clock disposal.
-- **18 Chromium workflows:** real-media import and analysis; synchronized resized
+  progress/abort cleanup and native/fallback playback-clock disposal; v3-to-v4
+  migration, live membership/placement, manual transfers, promotion/reuse,
+  independent view removal, space docking/visibility and validated ZIP recovery.
+- **22 Chromium workflows:** real-media import and analysis; synchronized resized
   scrubbers and exact linked-still recapture; magnetic group interactions, Undo
   and reload; ZIP roundtrip, rejected incomplete backups and offscreen PNG export;
   known-cut detection, cached threshold adjustment, shot seeking and older boards;
@@ -64,7 +67,11 @@ on **4193** and use fresh contexts, leaving the working board on **5193** alone.
   through transport and shared-view retiming, pending/invalid segment protection,
   case-insensitive code reuse, definition retrieval, action-button keyboard Undo,
   and covered/offscreen evidence/panel reveal; hidden-source clock reset after
-  restore, unrelated pointer-event isolation, and editing after a corrupt ZIP.
+  restore, unrelated pointer-event isolation, and editing after a corrupt ZIP;
+  group arrangement/movement/resizing, keyboard placement, atomic promotion/Undo,
+  native code dragging, assignment/rename updates, mixed clip/region collections,
+  closing a still view and recovering its frame/source, fresh v4 ZIP restore and
+  PNG, plus bounded rendering/one-preview playback in a 250-quotation collection.
 
 The versioned [synthetic fixture](../e2e/fixtures/README.md) contains no private media.
 Browser workflows use the actual decoder, workers and IndexedDB. The unit storage
@@ -74,7 +81,12 @@ under ignored `tmp/playwright/`; open the HTML report with
 The development watcher excludes `tmp/`: generating HTML reports/traces there
 must not reload an active demo or discard its transient selection/draft.
 
-Verified on **bugglzwerg, 5 November 2026** after the code quality pass:
+Verified on **bugglzwerg, 6 November 2026** after the evidence-space implementation:
+`npm run check` passed formatting, **90 checks** and the production build. The
+browser portion took about 66 seconds. See the evidence-space section below for
+the workflow, manual QA and project-format compatibility.
+
+Previously verified on **bugglzwerg, 5 November 2026** after the code quality pass:
 `npm run check` passed formatting, **71 checks** and the production build.
 The browser portion took about 54 seconds. See the quality section below for
 the substantive refactoring and fixes; all earlier evidence remains historical.
@@ -101,6 +113,57 @@ pre-detector suite passed 18 checks in about 11 seconds after correcting a runne
 viewport mismatch.
 Automated coverage currently targets Chromium with VP9/Opus, not a codec/browser
 compatibility matrix.
+
+## Evidence spaces · 6 November 2026
+
+One `SpaceCard` model supports two states. A provisional group has explicit
+quotation references and relative tile coordinates; a live collection has a
+`codeId` and reconciles those references against actual assignments. The pure
+helpers in `src/spaces.ts` retain existing positions, place new matches in free
+cells, remove deleted evidence, and promote a group atomically. They do not
+create quotations or media. A reused code also brings its previous matches into
+the promoted group. Closing a space leaves its evidence and codes intact.
+
+- Use **New evidence group**, name it, and **Add evidence** with optional uncoded
+  filtering. Codes' quotation rows can also be dragged in. Tile grips arrange
+  evidence; arrows nudge one board unit, Shift+arrows ten. A manual-to-manual drag
+  moves membership. Dragging from a live collection copies its reference and
+  retains coding. Dropping onto empty board space creates a new group.
+- **Turn into code** requires a nonempty named group, creates/reuses a name, and
+  assigns its code once to all members. Groups have their own memo. Collection
+  title edits rename the shared code; its definition and quotation memos stay
+  separate. Removing a live tile explicitly removes its code assignment.
+- Drag a code onto the board, or use its collection icon. Opening an existing
+  collection reveals it. Additional views created by promotion can follow the
+  same code independently, with their own memo and arrangement.
+- Evidence tiles edit the same quotation through the existing coding popover
+  and reveal its source context. Region previews retain the whole frame with
+  the selected rectangle outlined. Closing the standalone still view does not
+  remove its quotation; its exact preview can be recaptured from the original,
+  and source reveal creates a linked still view again.
+- Tile virtualization keeps the scroll viewport, selected evidence and pinned
+  preview mounted. Covers share the existing 48-image cache and one capture job
+  at a time; only one clip/evidence preview is active. Camera motion and module
+  geometry do not rebuild assignment indexes. This is bounded rendering, not a
+  new decoding-throughput benchmark.
+- Project schema **v4** adds `spaces`; v1–v3 migrate without changing their IDs,
+  source bytes, region geometry or coding. ZIP validation rejects missing code/
+  quotation references, duplicate members and invalid coordinates before storage
+  replacement. **v4 backups require this build or later; v0.0.2 cannot read them.**
+  CSV still exports quotations/assignments once. PNG paints all members of each
+  collection, fitting the complete arrangement inside its frame.
+
+The generated-media demo retained **one source, one clip, one still, one region,
+four quotations and one code**, with two live collection views and a collection
+memo. Native drag, retiming, removing/recovering a still view, shared preview,
+code reuse, fresh-session ZIP restore and byte-identical source recovery passed.
+PNG was visually inspected for arrangements, memo, region outlines and code
+labels. A separate browser walkthrough verified quotation-list drag, manual
+group transfer and drag-out grouping without changing assignments or creating
+quotations. No browser/runtime errors were observed. Disposable evidence is in
+ignored `tmp/evidence-spaces-2026-11-06/`; automated artifacts use the existing
+`tmp/playwright/` paths. All media are generated; the working origin/profile on
+5193 was left untouched. No dependency, FFmpeg-port or research-data change.
 
 ## Code quality · 5 November 2026
 
@@ -485,14 +548,15 @@ deliberately. Research media stays in browser storage and project backups.
 
 ## Experimental release and CI
 
-The current application release is **0.0.2**, tagged **v0.0.2**, also an
+The latest tagged application release is **0.0.2**, tagged **v0.0.2**, also an
 experimental GitHub prerelease. The [changelog](../CHANGELOG.md) records the coding
 and reliability changes since 0.0.1. Its release checks cover formatting, the
 production build, **53 Vitest checks and 18 Chromium workflows**.
 
 The first published application version is **0.0.1**, tagged **v0.0.1** and
 marked as an experimental GitHub prerelease. Version numbers describe the app;
-the persisted project format remains schema **v3**.
+both tagged releases use project schema **v3**. The current development build
+uses schema **v4**, documented above and under **Unreleased** in the changelog.
 
 The [Checks and Pages workflow](../.github/workflows/checks-and-pages.yml) installs
 the lockfile dependencies and Chromium, then runs `npm run check` on Node.js 24

@@ -23,13 +23,29 @@ qualitative video analysis.
 - Groups, collection memos and arrangements in local storage, Undo and project
   ZIPs. PNG export fits each complete arrangement into its frame, including
   scrolled-out items. Additional views do not duplicate CSV quotation rows.
-- Expand coverage from 71 to **104 checks: 78 Vitest checks and 26 real-media
+- Expand coverage from 71 to **131 checks: 97 Vitest checks and 34 real-media
   Chromium workflows**. Include all manual/live transfer combinations, legacy
   ZIP migration, zoomed/scrolled drops, same-project restore, preview cleanup and
   decoded PNG content for scrolled-out evidence.
 
+### Fixed
+
+- Resume pending video analysis and interrupted cut detection after a failed
+  project replacement, without reloading. Reopening a backup also resumes
+  detection requested by an existing Cuts module.
+- Stop pinned previews and pending hover activation when file work starts.
+- Keep drawing and segment drafting exclusive, reset validity for each new
+  draft, and reject late draft callbacks. Capturing media preserves an active
+  draft; failed project opens preserve its editing context.
+- Ignore unrelated pointers during range edits. Escape, blur and lost pointer
+  capture end gestures; unfinished rectangles are discarded while applied
+  movement and range edits remain.
+
 ### Changed
 
+- Give project operations, preview ownership and evidence editing small typed
+  transition models. A cancellable serial queue owns analysis progress and
+  suppresses obsolete job results; project generations change after commit.
 - Observe decoded preview frames advancing and looping instead of waiting a
   fixed time. Monitor runtime/console errors and failed app HTTP responses on
   every test page, close extra project contexts automatically, and restrict

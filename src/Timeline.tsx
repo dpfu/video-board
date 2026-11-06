@@ -1,4 +1,5 @@
-import { memo, useMemo, useRef } from 'react';
+import { memo, useMemo } from 'react';
+import { usePointerGesture } from './pointer';
 import type { CSSProperties, PointerEvent, KeyboardEvent } from 'react';
 import { clamp, timecode, type TrackKind, type VideoCard } from './model';
 import { shotAt, shotRanges } from './scenes';
@@ -33,7 +34,7 @@ export function Timeline({
   mode: TrackKind | 'position';
   onSeek: (time: number) => void;
 }) {
-  const active = useRef<number | null>(null);
+  const { active, finish } = usePointerGesture<{ pointer: number }>();
   const position = clamp((time / video.duration) * 100, 0, 100);
   const shots = useMemo(
     () => shotRanges(video.scenes, video.duration, video.start),
@@ -82,24 +83,27 @@ export function Timeline({
         aria-valuetext={mode === 'cuts' ? undefined : timecode(time)}
         onKeyDown={keyboard}
         onPointerDown={(event) => {
-          if (event.button !== 0 || mode === 'cuts') return;
+          if (event.button !== 0 || mode === 'cuts' || active.current) return;
           event.preventDefault();
           event.stopPropagation();
-          active.current = event.pointerId;
+          active.current = { pointer: event.pointerId };
           event.currentTarget.setPointerCapture(event.pointerId);
           seekPointer(event);
         }}
         onPointerMove={(event) => {
-          if (active.current === event.pointerId) seekPointer(event);
+          if (active.current?.pointer === event.pointerId) seekPointer(event);
         }}
         onPointerUp={(event) => {
-          if (active.current === event.pointerId) {
+          if (active.current?.pointer === event.pointerId) {
             seekPointer(event);
-            active.current = null;
+            finish(event.pointerId);
           }
         }}
-        onPointerCancel={() => {
-          active.current = null;
+        onPointerCancel={(event) => {
+          finish(event.pointerId);
+        }}
+        onLostPointerCapture={(event) => {
+          finish(event.pointerId);
         }}
       >
         {mode === 'filmstrip' && (

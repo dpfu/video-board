@@ -41,7 +41,7 @@ For a shorter iteration, use `npm test` or `npm run test:watch`; `npm run test:e
 builds and runs just the browser workflows. Browser tests start a separate server
 on **4193** and use fresh contexts, leaving the working board on **5193** alone.
 
-- **78 Vitest checks:** group movement, detaching, independent resizing, docking
+- **97 Vitest checks:** group movement, detaching, independent resizing, docking
   on four sides and at different zoom levels, legacy v1 migration, persistence
   and atomic rollback after a simulated storage failure; native FFmpeg score
   parity on 8/10-bit sequences, reusable buffers, geometry changes, 16-bit
@@ -54,8 +54,11 @@ on **4193** and use fresh contexts, leaving the working board on **5193** alone.
   progress/abort cleanup and native/fallback playback-clock disposal; v3-to-v4
   migration, live membership/placement, all four manual/live transfer combinations,
   same-space idempotence, promotion/reuse, independent view removal, space docking/
-  visibility, stored-membership reconciliation and v1/v2/v3 ZIP migration.
-- **26 Chromium workflows:** real-media import and analysis; synchronized resized
+  visibility, stored-membership reconciliation and v1/v2/v3 ZIP migration;
+  guarded project phases, pre/post-commit failure handling, serial job ownership,
+  cancellation and restart, obsolete progress suppression, preview ownership,
+  exclusive editing modes and draft-scoped validity/save callbacks.
+- **34 Chromium workflows:** real-media import and analysis; synchronized resized
   scrubbers and exact linked-still recapture; magnetic group interactions, Undo
   and reload; ZIP roundtrip, rejected incomplete backups and offscreen PNG export;
   known-cut detection, cached threshold adjustment, shot seeking and older boards;
@@ -75,7 +78,11 @@ on **4193** and use fresh contexts, leaving the working board on **5193** alone.
   PNG, plus bounded rendering/one-preview playback in a 250-quotation collection;
   zoomed/scrolled native transfers and drag-out grouping, decoded PNG content for
   scrolled-out evidence, same-project restore with refreshed covers, and pinned
-  preview cleanup after external coding/deletion.
+  preview cleanup after external coding/deletion; failed replacement recovery for
+  interrupted analysis/cuts and successful retry of pending backups, file-boundary
+  preview shutdown, retained editing context, exclusive drawing/segment modes,
+  fresh draft validity and media capture, unfinished rectangle cancellation,
+  foreign pointer releases, Escape, blur and lost capture.
 
 The versioned [synthetic fixture](../e2e/fixtures/README.md) contains no private media.
 Browser workflows use the actual decoder, workers and IndexedDB. The unit storage
@@ -85,7 +92,12 @@ under ignored `tmp/playwright/`; open the HTML report with
 The development watcher excludes `tmp/`: generating HTML reports/traces there
 must not reload an active demo or discard its transient selection/draft.
 
-Verified on **bugglzwerg, 6 November 2026** after the test-suite refinement:
+Verified on **bugglzwerg, 6 November 2026** after the transition implementation:
+`npm run check` passed formatting, **131 checks** and the production build. The
+eight new transition workflows also passed two consecutive repetitions. Reports
+and generated downloads use the usual ignored `tmp/playwright/` paths.
+
+Previously verified on **bugglzwerg, 6 November 2026** after the test-suite refinement:
 `npm run check` passed formatting, **104 checks** and the production build. The
 five playback/new-regression workflows also passed two consecutive repetitions.
 See the test-refinement section below for the assertions and their limits.
@@ -122,6 +134,51 @@ pre-detector suite passed 18 checks in about 11 seconds after correcting a runne
 viewport mismatch.
 Automated coverage currently targets Chromium with VP9/Opus, not a codec/browser
 compatibility matrix.
+
+## Explicit transitions · 6 November 2026
+
+The source audit found a broken coordination transition: project opening
+invalidated the old analysis generation before atomic replacement succeeded.
+With a held analysis result and an injected storage failure, the original board
+remained editable but retained `pending` analysis, zero jobs and a permanent
+"Processing locally" indicator. Reloading resumed the job. The new regression
+in `e2e/transitions.spec.ts` reproduces that interleaving and verifies recovery
+without reload, for both full analysis and cut-only work.
+
+| Owner | Responsibility |
+| --- | --- |
+| `src/project.ts` | Startup and exclusive PNG/ZIP/open operations. Restore phases are reading → backup → draining → committing → installing. Invalid phase jumps are ignored. Pre-commit failure restores the prior availability state; post-commit installation failure reports that the saved project needs reopening. |
+| `src/jobs.ts` | Deduplicated serial analysis/cut jobs, queued/running snapshots and job-owned progress. Cancellation aborts workers, suppresses late results/progress, and drains outstanding I/O before replacement. Failed opens resume pending work; existing Cuts modules express detection intent on reopen. |
+| `src/preview.ts` | Idle, pending hover, hovering and pinned ownership, with typed clip/evidence targets. File work stops ownership; stale elapsed callbacks cannot restore it. Reconciliation releases removed evidence. |
+| `src/editing.ts` | Quotation focus, drawing and identified segment drafts. Visual module selection stays separate. Draft validity and completion belong to their draft ID; mode changes reject stale callbacks. Successful project open resets context; rejection preserves it. |
+| `src/useMachine.ts` | One transition updates the synchronous handler ref and React view together, keeping delayed callbacks and renders consistent. |
+| `src/pointer.ts` | Shared pointer ownership and finish handling for timelines, clip scrubbing, ranges and regions. Escape/blur/lost capture terminate the owned gesture; foreign pointers are ignored. |
+
+The project/asset generation increments only after successful storage commit.
+Cancelled old jobs finish before replacement, and restarted jobs have fresh
+identities even for the same source. Cover generation therefore retains its old
+project on failure and resets on successful replacement. Progress changes keep
+the Cuts-membership set stable so they do not rebuild every memoized module.
+
+Unfinished region rectangles are discarded on cancellation. Existing region
+movement, module movement and range edits retain their most recently applied
+value. Capturing or arranging media preserves an active draft; explicitly
+selecting another analytical mode switches context. New draft/quotation editors
+are keyed by their identity so invalid text cannot leak into a new selection.
+
+The browser fixture wraps the worker boundary to hold the first actual decoded
+result; the next worker decodes normally. A one-shot IndexedDB failure affects
+only atomic project replacement. Tests check worker disposal/restart, retained
+quotation identities and original bytes, plus successful retry of the same
+pending backup. The remaining browser scenarios exercise the actual controls.
+All use generated media, fresh contexts and port 4193. This is lifecycle
+verification, not a new decoding-performance or codec-coverage claim.
+
+Project schema remains **v4**; no dependency or FFmpeg scorer/reference change.
+The smaller cache/input/animation machines retain their existing implementations
+except for shared pointer cleanup and editor identity. The persisted `partial`
+analysis outcome still covers both incomplete audio and analysis failure; a
+richer persisted outcome model and broader player unification remain deferred.
 
 ## Test refinement · 6 November 2026
 

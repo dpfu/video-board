@@ -24,7 +24,24 @@ import { VideoPlayer, type PlayerHandle } from './VideoPlayer';
 import { Still } from './Still';
 import { Track } from './Track';
 import { Clip } from './Clip';
-import { Coding, type RangeDraft } from './Coding';
+import { Coding } from './Coding';
+import { useMachine } from './useMachine';
+import { projectTransition, projectMessage, type ProjectState, type ProjectEvent } from './project';
+import { BackgroundJobs, type JobState, type JobRequest } from './jobs';
+import {
+  previewTransition,
+  previewView,
+  type PreviewState,
+  type PreviewEvent,
+  type PreviewTarget,
+} from './preview';
+import {
+  editingTransition,
+  activeQuotationId,
+  canSaveSegment,
+  type EditingState,
+  type EditingEvent,
+} from './editing';
 import { CodePopover } from './CodePopover';
 import { EvidenceSpace } from './EvidenceSpace';
 import {
@@ -108,15 +125,24 @@ type Gesture = PointerOrigin &
 export function App() {
   const [board, setBoard] = useState<Board>(emptyBoard);
   const current = useRef(board);
-  const [loaded, setLoaded] = useState(false);
-  const [fatal, setFatal] = useState('');
+  const project = useMachine<ProjectState, ProjectEvent>(projectTransition, { kind: 'loading' });
+  const editing = useMachine<EditingState, EditingEvent>(editingTransition, { kind: 'idle' });
+  const previews = useMachine<PreviewState, PreviewEvent>(previewTransition, { kind: 'idle' });
+  const [jobs, setJobs] = useState<JobState[]>([]);
+  const background = useRef<BackgroundJobs>();
+  if (!background.current) background.current = new BackgroundJobs(setJobs);
+  const loaded =
+    project.state.kind === 'ready' ||
+    project.state.kind === 'exporting' ||
+    (project.state.kind === 'opening' && project.state.fallback.kind === 'ready');
+  const fatal = project.state.kind === 'unavailable' ? project.state.message : '';
   const [urls, setUrls] = useState<Record<string, string>>({});
   const objectUrls = useRef<Record<string, string>>({});
   const assets = useRef(new Map<string, Blob>());
   const [selected, setSelected] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState<'saving' | 'saved' | 'error'>('saved');
-  const [working, setWorking] = useState('');
+  const working = jobs.find((job) => job.phase === 'running')?.label || '';
   const [importing, setImporting] = useState(false);
   const [busy, setBusy] = useState<Set<string>>(new Set());
   const [hand, setHand] = useState(false);
@@ -125,25 +151,28 @@ export function App() {
   const [removed, setRemoved] = useState(false);
   const history = useRef<Board[]>([]);
   const [undoCount, setUndoCount] = useState(0);
-  const [activeQuotation, setActiveQuotation] = useState<string | null>(null);
-  const [drawing, setDrawing] = useState<string | null>(null);
-  const [draft, setDraft] = useState<RangeDraft | null>(null);
-  const [popover, setPopover] = useState<{ x: number; y: number } | null>(null);
-  const [preview, setPreview] = useState<{ id: string; pinned: boolean; moduleId?: string } | null>(
-    null,
-  );
+  const activeQuotation = activeQuotationId(editing.state);
+  const drawing = editing.state.kind === 'drawing' ? editing.state.stillId : null;
+  const draft = editing.state.kind === 'segment' ? editing.state.draft : null;
+  const draftValid = canSaveSegment(editing.state);
+  const popover = editing.state.kind === 'quotation' ? editing.state.popover : undefined;
+  const preview = useMemo(() => previewView(previews.state), [previews.state]);
   const [spaceEvidence, setSpaceEvidence] = useState<Record<string, string[]>>({});
   const [viewport, setViewport] = useState({
     width: window.innerWidth,
     height: window.innerHeight,
   });
-  const hoverTimer = useRef<ReturnType<typeof setTimeout>>();
   const clipElements = useRef(new Map<string, HTMLVideoElement>());
-  const [operation, updateOperation] = useState(false);
-  const operationActive = useRef(false);
+  const operation = project.state.kind === 'opening' || project.state.kind === 'exporting';
   const [snap, setSnap] = useState<Snap | null>(null);
-  const [sceneBusy, setSceneBusy] = useState(new Set<string>());
-  const sceneJobs = useRef(new Set<string>());
+  const sceneBusyKey = jobs
+    .filter((job) => job.kind === 'scenes')
+    .map((job) => job.sourceId)
+    .join('|');
+  const sceneBusy = useMemo(
+    () => new Set(sceneBusyKey ? sceneBusyKey.split('|') : []),
+    [sceneBusyKey],
+  );
   const snapRef = useRef<Snap | null>(null);
   const [moving, setMoving] = useState(new Set<string>());
   const stage = useRef<HTMLDivElement>(null);
@@ -152,15 +181,10 @@ export function App() {
   const players = useRef(new Map<string, PlayerHandle>());
   const gesture = useRef<Gesture | null>(null);
   const saveQueue = useRef(Promise.resolve());
-  const analysisQueue = useRef(Promise.resolve());
   const epoch = useRef(0);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
   const initialised = useRef(false);
-  const editingLocked = operation || !loaded;
-  function setOperation(active: boolean) {
-    operationActive.current = active;
-    updateOperation(active);
-  }
+  const editingLocked = project.state.kind !== 'ready';
   const docks = useMemo(
     () => dockIndex(board),
     [board.videos, board.stills, board.tracks, board.clips, board.panels, board.spaces],
@@ -190,13 +214,22 @@ export function App() {
     observer.observe(stage.current);
     return () => observer.disconnect();
   }, []);
-  useEffect(() => () => clearTimeout(hoverTimer.current), []);
   useEffect(() => {
-    if (!preview?.moduleId) return;
-    const space = board.spaces.find((space) => space.id === preview.moduleId);
-    if (!space?.items.some((item) => `${space.id}/${item.quotationId}` === preview.id))
-      setPreview(null);
-  }, [board.spaces, preview]);
+    if (previews.state.kind !== 'pending') return;
+    const target = previews.state.target;
+    const timer = setTimeout(() => {
+      previews.send(
+        project.current.current.kind === 'ready' && !gesture.current
+          ? { type: 'elapsed', target }
+          : { type: 'interruptHover' },
+      );
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [previews.state]);
+  useEffect(() => {
+    previews.send({ type: 'reconcile', board: current.current });
+    editing.send({ type: 'reconcile', board: current.current });
+  }, [board.spaces, board.clips, board.stills, board.quotations]);
   useEffect(() => {
     if (stage.current) stage.current.inert = editingLocked;
   }, [editingLocked]);
@@ -216,7 +249,7 @@ export function App() {
     setRemoved(false);
   }
   function undo() {
-    if (operationActive.current) return;
+    if (project.current.current.kind !== 'ready') return;
     const previous = history.current.pop();
     if (!previous) return;
     // Retain completed analysis when undoing an earlier metadata/layout edit.
@@ -239,9 +272,8 @@ export function App() {
     change(() => ({ ...previous, videos, camera: current.current.camera }));
     setUndoCount(history.current.length);
     setRemoved(false);
-    setDraft(null);
-    setDrawing(null);
-    setPreview(null);
+    editing.send({ type: 'undo', board: current.current });
+    previews.send({ type: 'stop' });
   }
   function openCodes(revealExisting = false) {
     const existing = current.current.panels[0];
@@ -267,12 +299,14 @@ export function App() {
     }));
   }
   function showCoding(id: string) {
-    setDraft(null);
-    setActiveQuotation(id);
     const rect = document.activeElement?.getBoundingClientRect();
-    setPopover({
-      x: clamp((rect?.right || 300) - 260, 12, Math.max(12, window.innerWidth - 272)),
-      y: clamp(rect?.bottom || 80, 60, Math.max(60, window.innerHeight - 370)),
+    editing.send({
+      type: 'code',
+      id,
+      at: {
+        x: clamp((rect?.right || 300) - 260, 12, Math.max(12, window.innerWidth - 272)),
+        y: clamp(rect?.bottom || 80, 60, Math.max(60, window.innerHeight - 370)),
+      },
     });
   }
   function selectModule(id: string) {
@@ -287,7 +321,7 @@ export function App() {
         : trackSource
           ? sourceQuotationId(trackSource)
           : undefined);
-    if (q) setActiveQuotation(q);
+    if (q) editing.send({ type: 'selectView', id: q });
   }
   function selectCard(event: ReactPointerEvent, id: string) {
     // Operating a view is separate from choosing evidence to code. In
@@ -343,7 +377,7 @@ export function App() {
         : reconcileSpaces(next);
     });
     setSelected(space.id);
-    setPopover(null);
+    editing.send({ type: 'closePopover' });
     exposeModule(space.id, 1);
   }
   function patchSpace(id: string, patch: Partial<Pick<SpaceCard, 'name' | 'memo'>>) {
@@ -408,20 +442,12 @@ export function App() {
         : [...q.codeIds, codeId],
     });
   }
-  function requestHover(id: string, hover: boolean, moduleId?: string) {
-    clearTimeout(hoverTimer.current);
-    if (!hover) {
-      setPreview((p) => (p?.id === id && !p.pinned ? null : p));
-      return;
-    }
-    if (gesture.current || operation) return;
-    hoverTimer.current = setTimeout(() => {
-      if (!gesture.current) setPreview((p) => (p?.pinned ? p : { id, pinned: false, moduleId }));
-    }, 120);
+  function requestHover(target: PreviewTarget, hover: boolean) {
+    if (hover && (gesture.current || project.current.current.kind !== 'ready')) return;
+    previews.send({ type: hover ? 'enter' : 'leave', target });
   }
   function stopHover() {
-    clearTimeout(hoverTimer.current);
-    setPreview((p) => (p?.pinned ? p : null));
+    previews.send({ type: 'interruptHover' });
   }
   function patchVideo(id: string, patch: Partial<VideoCard>) {
     change((b) => ({ ...b, videos: b.videos.map((v) => (v.id === id ? { ...v, ...patch } : v)) }));
@@ -446,20 +472,17 @@ export function App() {
     });
   }
   function processVideo(id: string, blob: Blob) {
-    const generation = epoch.current;
-    analysisQueue.current = analysisQueue.current.then(async () => {
-      if (generation !== epoch.current || !current.current.videos.some((v) => v.id === id)) return;
-      try {
-        const result = await analyzeVideo(blob, (label) => {
-          if (generation === epoch.current) setWorking(label);
-        });
-        if (generation !== epoch.current || !current.current.videos.some((v) => v.id === id))
-          return;
+    background.current!.enqueue(
+      { sourceId: id, kind: 'analysis' },
+      async (job) => {
+        if (!current.current.videos.some((v) => v.id === id)) return;
+        const result = await analyzeVideo(blob, job.progress, job.signal);
+        if (!job.current() || !current.current.videos.some((v) => v.id === id)) return;
         const additions = new Map(
           result.thumbnails.map((thumb, index) => [`${id}-thumb-${index}`, thumb]),
         );
         await saveAssets(additions);
-        if (generation !== epoch.current) return;
+        if (!job.current() || !current.current.videos.some((v) => v.id === id)) return;
         installAssets(additions);
         patchVideo(id, {
           thumbnails: [...additions.keys()],
@@ -469,49 +492,45 @@ export function App() {
           analysis: result.note && result.note !== 'No audio track' ? 'partial' : 'ready',
           analysisNote: result.note,
         });
-      } catch (error) {
-        if (generation === epoch.current)
-          patchVideo(id, {
-            analysis: 'partial',
-            analysisNote: error instanceof Error ? error.message : 'Media analysis failed',
-          });
-      } finally {
-        if (generation === epoch.current) setWorking('');
-      }
-    });
+      },
+      (error) => {
+        if (!current.current.videos.some((v) => v.id === id)) return;
+        patchVideo(id, {
+          analysis: 'partial',
+          analysisNote: error instanceof Error ? error.message : 'Media analysis failed',
+        });
+      },
+    );
   }
 
   function scanScenes(id: string) {
     const video = current.current.videos.find((v) => v.id === id),
       blob = assets.current.get(id);
-    if (
-      !video ||
-      !blob ||
-      video.scenes ||
-      video.analysis === 'pending' ||
-      sceneJobs.current.has(id)
-    )
-      return;
-    sceneJobs.current.add(id);
-    setSceneBusy(new Set(sceneJobs.current));
-    const generation = epoch.current;
-    analysisQueue.current = analysisQueue.current.then(async () => {
-      try {
-        if (generation !== epoch.current || !current.current.videos.some((v) => v.id === id))
-          return;
-        const scenes = await detectScenes(blob, (label) => {
-          if (generation === epoch.current) setWorking(label);
-        });
-        if (generation === epoch.current) patchVideo(id, { scenes });
-      } catch (error) {
-        if (generation === epoch.current)
-          setNotice(error instanceof Error ? error.message : 'Cut detection failed.');
-      } finally {
-        sceneJobs.current.delete(id);
-        setSceneBusy(new Set(sceneJobs.current));
-        if (generation === epoch.current) setWorking('');
-      }
-    });
+    if (!video || !blob || video.scenes || video.analysis === 'pending') return;
+    background.current!.enqueue(
+      { sourceId: id, kind: 'scenes' },
+      async (job) => {
+        if (!current.current.videos.some((v) => v.id === id)) return;
+        const scenes = await detectScenes(blob, job.progress, job.signal);
+        if (job.current() && current.current.videos.some((v) => v.id === id))
+          patchVideo(id, { scenes });
+      },
+      (error) => setNotice(error instanceof Error ? error.message : 'Cut detection failed.'),
+    );
+  }
+
+  function resumeJobs(interrupted: JobRequest[] = []) {
+    for (const video of current.current.videos) {
+      const blob = assets.current.get(video.id);
+      if (video.analysis === 'pending' && blob) processVideo(video.id, blob);
+    }
+    const requestedCuts = new Set([
+      ...current.current.tracks
+        .filter((track) => track.kind === 'cuts')
+        .map((track) => track.videoId),
+      ...interrupted.filter((job) => job.kind === 'scenes').map((job) => job.sourceId),
+    ]);
+    for (const id of requestedCuts) scanScenes(id);
   }
 
   useEffect(() => {
@@ -519,26 +538,28 @@ export function App() {
     initialised.current = true;
     void loadBoard()
       .then(({ board: saved, assets: stored }) => {
+        if (project.current.current.kind !== 'loading') return;
         installAssets(stored);
         resetPlayheads(saved?.videos || []);
         if (saved) {
           current.current = saved;
           setBoard(saved);
         }
-        setLoaded(true);
-        for (const video of saved?.videos || [])
-          if (video.analysis === 'pending') {
-            const blob = stored.get(video.id);
-            if (blob) processVideo(video.id, blob);
-          }
+        project.send({ type: 'loaded' });
+        resumeJobs();
       })
-      .catch((error) => setFatal(`The local board could not be opened: ${error.message}`));
+      .catch((error) =>
+        project.send({
+          type: 'loadFailed',
+          message: `The local board could not be opened: ${error.message}`,
+        }),
+      );
     // These URLs live for the page lifetime; replacing an asset revokes its old
     // URL. Revoking on effect cleanup would break live video seeking during HMR.
   }, []);
 
   useEffect(() => {
-    if (!loaded || operation) return;
+    if (project.state.kind !== 'ready') return;
     setSaving('saving');
     const snapshot = board;
     saveTimer.current = setTimeout(() => {
@@ -556,12 +577,22 @@ export function App() {
         });
     }, 220);
     return () => clearTimeout(saveTimer.current);
-  }, [board, loaded, operation]);
+  }, [board, project.state.kind]);
+
+  function finishGesture(commit: boolean) {
+    if (commit && gesture.current?.kind === 'move' && snapRef.current)
+      change((b) => applySnap(b, snapRef.current!));
+    gesture.current = null;
+    snapRef.current = null;
+    setSnap(null);
+    setMoving(new Set());
+    document.body.classList.remove('is-dragging');
+  }
 
   useEffect(() => {
     const move = (event: PointerEvent) => {
       const g = gesture.current;
-      if (!g || g.pointer !== event.pointerId || operationActive.current) return;
+      if (!g || g.pointer !== event.pointerId || project.current.current.kind !== 'ready') return;
       const dx = (event.clientX - g.x) / g.scale,
         dy = (event.clientY - g.y) / g.scale;
       if (g.kind === 'pan')
@@ -613,31 +644,20 @@ export function App() {
           ),
         );
     };
-    const finish = (commit: boolean) => {
-      if (commit && gesture.current?.kind === 'move' && snapRef.current)
-        change((b) => applySnap(b, snapRef.current!));
-      gesture.current = null;
-      snapRef.current = null;
-      setSnap(null);
-      setMoving(new Set());
-      document.body.classList.remove('is-dragging');
-    };
     const pointerUp = (event: PointerEvent) => {
-      if (gesture.current?.pointer === event.pointerId) finish(!event.shiftKey);
+      if (gesture.current?.pointer === event.pointerId) finishGesture(!event.shiftKey);
     };
     const pointerCancel = (event: PointerEvent) => {
-      if (gesture.current?.pointer === event.pointerId) finish(false);
+      if (gesture.current?.pointer === event.pointerId) finishGesture(false);
     };
     const down = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || operationActive.current) return;
+      if (event.defaultPrevented || project.current.current.kind !== 'ready') return;
       if (event.key === 'Escape') {
-        finish(false);
+        finishGesture(false);
         setSelected(null);
         setHand(false);
-        setDrawing(null);
-        setDraft(null);
-        setPreview(null);
-        setPopover(null);
+        editing.send({ type: 'escape' });
+        previews.send({ type: 'stop' });
         return;
       }
       if (
@@ -661,7 +681,7 @@ export function App() {
     };
     const blur = () => {
       setSpace(false);
-      finish(false);
+      finishGesture(false);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', pointerUp);
@@ -683,7 +703,7 @@ export function App() {
     const viewport = stage.current;
     if (!viewport) return;
     const wheel = (event: WheelEvent) => {
-      if (operationActive.current) return;
+      if (project.current.current.kind !== 'ready') return;
       if ((event.target as Element).closest('select, input')) return;
       event.preventDefault();
       if (event.ctrlKey || event.metaKey) {
@@ -784,6 +804,7 @@ export function App() {
   ) {
     if (
       editingLocked ||
+      gesture.current ||
       event.button !== 0 ||
       (kind === 'move' &&
         !independent &&
@@ -852,7 +873,7 @@ export function App() {
     };
   }
   function pan(event: ReactPointerEvent) {
-    if (editingLocked || ![0, 1].includes(event.button)) return;
+    if (editingLocked || gesture.current || ![0, 1].includes(event.button)) return;
     if ((event.target as Element).closest('.board-tools, .zoom-tools, .empty-board')) return;
     if (!hand && !space && event.button !== 1 && (event.target as Element).closest('.board-card'))
       return;
@@ -994,7 +1015,7 @@ export function App() {
       quotations: b.quotations.some((old) => old.id === q.id) ? b.quotations : [...b.quotations, q],
     }));
     setSelected(clip.id);
-    setActiveQuotation(q.id);
+    editing.send({ type: 'selectView', id: q.id });
   }
   function createClip(sourceId: string, time: number) {
     const source = current.current.videos.find((v) => v.id === sourceId);
@@ -1019,26 +1040,37 @@ export function App() {
     const q = current.current.quotations.find((q) => q.id === parentId);
     if (!q) return;
     const start = clamp(time, q.start, Math.max(q.start, q.end - 0.001));
-    setPopover(null);
-    setDraft({
-      sourceId,
-      parentId,
-      min: q.start,
-      max: q.end,
-      start,
-      end: Math.min(q.end, start + 1),
+    editing.send({
+      type: 'startSegment',
+      draft: {
+        id: crypto.randomUUID(),
+        sourceId,
+        parentId,
+        min: q.start,
+        max: q.end,
+        start,
+        end: Math.min(q.end, start + 1),
+      },
     });
     openCodes(true);
   }
   function saveSegment() {
-    if (!draft) return;
+    const state = editing.current.current;
+    if (
+      !canSaveSegment(state) ||
+      state.kind !== 'segment' ||
+      !current.current.quotations.some((q) => q.id === state.draft.parentId)
+    )
+      return;
+    const draft = state.draft;
     checkpoint();
     const q = quotation(draft.sourceId, 'range', draft.start, draft.end, draft.parentId);
     change((b) => ({ ...b, quotations: [...b.quotations, q] }));
-    setActiveQuotation(q.id);
-    setDraft(null);
+    editing.send({ type: 'segmentSaved', id: q.id, draftId: draft.id });
   }
   function createRegion(still: StillCard, rect: Rect) {
+    const state = editing.current.current;
+    if (state.kind !== 'drawing' || state.stillId !== still.id) return;
     checkpoint();
     const duration = current.current.videos.find((v) => v.id === still.videoId)!.duration;
     const q = {
@@ -1052,7 +1084,7 @@ export function App() {
       rect,
     };
     change((b) => ({ ...b, quotations: [...b.quotations, q] }));
-    setActiveQuotation(q.id);
+    editing.send({ type: 'regionCreated', stillId: still.id, id: q.id });
     openCodes();
   }
   function deleteQuotation(q: Quotation) {
@@ -1082,15 +1114,13 @@ export function App() {
         (c) => (c.dock && removedViews.has(c.dock.to) ? { ...c, dock: undefined } : c),
       ),
     );
-    setActiveQuotation(null);
-    setDrawing(null);
-    setPopover(null);
-    setPreview((p) => (p && removedViews.has(p.id) ? null : p));
+    editing.send({ type: 'escape' });
+    editing.send({ type: 'reconcile', board: current.current });
+    previews.send({ type: 'reconcile', board: current.current });
     setRemoved(true);
   }
   function reveal(q: Quotation) {
-    setDraft(null);
-    setActiveQuotation(q.id);
+    editing.send({ type: 'selectQuotation', id: q.id });
     if (q.kind === 'frame' || q.kind === 'region') {
       const frameId = q.kind === 'frame' ? q.id : q.parentId,
         still = current.current.stills.find((s) => s.quotationId === frameId);
@@ -1115,7 +1145,7 @@ export function App() {
     };
     change((b) => ({ ...b, stills: [...b.stills, copy] }));
     setSelected(copy.id);
-    setActiveQuotation(still.quotationId || null);
+    if (still.quotationId) editing.send({ type: 'selectView', id: still.quotationId });
   }
   async function makeStill(
     videoId: string,
@@ -1125,7 +1155,7 @@ export function App() {
   ) {
     const video = current.current.videos.find((v) => v.id === videoId),
       blob = assets.current.get(videoId);
-    if (!video || !blob) return;
+    if (project.current.current.kind !== 'ready' || !video || !blob) return;
     const id = existingId || crypto.randomUUID(),
       generation = epoch.current;
     const existing = current.current.stills.find((s) => s.id === existingId);
@@ -1193,7 +1223,7 @@ export function App() {
         };
       });
       setSelected(id);
-      if (!existingId && !frameQuotationId) setActiveQuotation(qid);
+      if (!existingId && !frameQuotationId) editing.send({ type: 'selectView', id: qid });
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'The still could not be created.');
     } finally {
@@ -1218,9 +1248,9 @@ export function App() {
       ),
     );
     setSelected(null);
-    setDrawing(null);
-    setPopover(null);
-    setPreview((p) => (p?.id === id || p?.moduleId === id ? null : p));
+    editing.send({ type: 'closePopover' });
+    editing.send({ type: 'reconcile', board: current.current });
+    previews.send({ type: 'reconcile', board: current.current });
     setRemoved(true);
   }
   function jump(still: Pick<StillCard, 'videoId' | 'time'>) {
@@ -1231,9 +1261,14 @@ export function App() {
     motion.highlight(still.videoId);
     exposeModule(still.videoId);
   }
+  function startFile(event: { type: 'open' } | { type: 'export'; format: 'png' | 'zip' }) {
+    if (importing || busy.size > 0 || !project.send(event)) return false;
+    finishGesture(false);
+    previews.send({ type: 'stop' });
+    return true;
+  }
   async function exportImage() {
-    if (operationActive.current || importing) return;
-    setOperation(true);
+    if (!startFile({ type: 'export', format: 'png' })) return;
     setNotice('');
     try {
       const elements = new Map<string, HTMLVideoElement>();
@@ -1253,42 +1288,46 @@ export function App() {
         await exportBoard(snapshot, assets.current, elements),
         `${safeFilename(snapshot.name)}.png`,
       );
+      project.send({ type: 'finished' });
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Image export failed.');
-    } finally {
-      setOperation(false);
+      const message = error instanceof Error ? error.message : 'Image export failed.';
+      setNotice(message);
+      project.send({ type: 'failed', message });
     }
   }
   async function exportProject() {
-    if (operationActive.current || importing) return;
-    setOperation(true);
+    if (!startFile({ type: 'export', format: 'zip' })) return;
     try {
       download(
         await backupBoard(current.current, assets.current),
         `${safeFilename(current.current.name)}.videoboard.zip`,
       );
+      project.send({ type: 'finished' });
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Project backup failed.');
-    } finally {
-      setOperation(false);
+      const message = error instanceof Error ? error.message : 'Project backup failed.';
+      setNotice(message);
+      project.send({ type: 'failed', message });
     }
   }
   async function openProject(file: File) {
-    if (operationActive.current || importing || busy.size > 0) return;
-    setOperation(true);
+    if (!startFile({ type: 'open' })) return;
     setNotice('');
+    let interrupted: JobRequest[] = [];
     try {
       const restored = await restoreArchive(file);
-      // Keep the previous board reviewable and recoverable before replacing it.
+      project.send({ type: 'archiveRead' });
       if (current.current.videos.length) {
         const backup = await backupBoard(current.current, assets.current);
         download(backup, `${safeFilename(current.current.name)}-before-open.videoboard.zip`);
       }
+      project.send({ type: 'recoveryCreated' });
       clearTimeout(saveTimer.current);
       await saveQueue.current.catch(() => {});
-      epoch.current++;
-      await analysisQueue.current;
+      interrupted = await background.current!.cancelAll();
+      project.send({ type: 'jobsDrained' });
       await replaceBoard(restored.board, restored.assets);
+      project.send({ type: 'storageCommitted' });
+      epoch.current++;
       assets.current = new Map();
       for (const url of Object.values(objectUrls.current)) URL.revokeObjectURL(url);
       objectUrls.current = {};
@@ -1298,23 +1337,23 @@ export function App() {
       resetPlayheads(restored.board.videos);
       setSelected(null);
       setRemoved(false);
-      setWorking('');
-      setFatal('');
-      setLoaded(true);
       history.current = [];
       setUndoCount(0);
-      setActiveQuotation(null);
-      setDrawing(null);
-      setDraft(null);
-      setPreview(null);
-      setPopover(null);
-      clearTimeout(hoverTimer.current);
-      for (const video of restored.board.videos)
-        if (video.analysis === 'pending') processVideo(video.id, restored.assets.get(video.id)!);
+      editing.send({ type: 'reset' });
+      project.send({ type: 'finished' });
+      resumeJobs();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Project backup could not be opened.');
-    } finally {
-      setOperation(false);
+      const message =
+        error instanceof Error ? error.message : 'Project backup could not be opened.';
+      const state = project.current.current;
+      const committed = state.kind === 'opening' && state.phase === 'installing';
+      project.send({ type: 'failed', message });
+      setNotice(
+        committed && project.current.current.kind === 'unavailable'
+          ? project.current.current.message
+          : message,
+      );
+      if (!committed) resumeJobs(interrupted);
     }
   }
 
@@ -1468,11 +1507,11 @@ export function App() {
                   selectedRegion={activeQuotation}
                   drawing={drawing === still.id}
                   onDraw={() => {
-                    setDrawing(drawing === still.id ? null : still.id);
-                    setActiveQuotation(still.quotationId || null);
+                    if (still.quotationId)
+                      editing.send({ type: 'draw', stillId: still.id, frameId: still.quotationId });
                   }}
                   onSelectRegion={(id) => {
-                    setActiveQuotation(id);
+                    editing.send({ type: 'selectQuotation', id });
                     setSelected(still.id);
                     openCodes();
                   }}
@@ -1581,17 +1620,16 @@ export function App() {
                   pinned={preview?.id === clip.id && preview.pinned}
                   busy={busy.has(video.id) || editingLocked}
                   dockControls={controlsFor(clip.id)}
-                  onHover={(hover) => requestHover(clip.id, hover)}
+                  onHover={(hover) => requestHover({ kind: 'clip', id: clip.id }, hover)}
                   onPin={() => {
-                    clearTimeout(hoverTimer.current);
-                    setPreview({ id: clip.id, pinned: true });
+                    previews.send({ type: 'pin', target: { kind: 'clip', id: clip.id } });
                   }}
                   onDrag={(e) => begin(e, 'move', clip.id)}
                   onRange={(start, end) => patchQuotation(q.id, { start, end })}
                   onEditStart={() => {
                     checkpoint();
                     stopHover();
-                    setActiveQuotation(q.id);
+                    editing.send({ type: 'selectQuotation', id: q.id });
                   }}
                   onCapture={(time) => void makeStill(video.id, time)}
                   onSegment={(time) => segment(video.id, q.id, time)}
@@ -1603,7 +1641,7 @@ export function App() {
                     else clipElements.current.delete(clip.id);
                   }}
                   onCode={() => showCoding(q.id)}
-                  onStop={() => setPreview(null)}
+                  onStop={() => previews.send({ type: 'stop' })}
                   onRate={(rate) =>
                     change((b) => ({
                       ...b,
@@ -1638,6 +1676,7 @@ export function App() {
               board={board}
               target={board.quotations.find((q) => q.id === activeQuotation)}
               draft={draft}
+              draftValid={draftValid}
               dockControls={controlsFor(panel.id)}
               onDrag={(e) => begin(e, 'move', panel.id)}
               onClose={() => remove(panel.id)}
@@ -1655,9 +1694,10 @@ export function App() {
               onPlace={placeClip}
               onCollection={(codeId) => createSpace(codeId)}
               onDeleteQuotation={deleteQuotation}
-              onDraft={setDraft}
+              onDraft={(draft) => editing.send({ type: 'changeDraft', draft })}
+              onDraftValidity={(id, valid) => editing.send({ type: 'draftValidity', id, valid })}
               onSaveDraft={saveSegment}
-              onCancelDraft={() => setDraft(null)}
+              onCancelDraft={() => editing.send({ type: 'escape' })}
               onSource={(id) => {
                 const q = board.quotations.find((q) => q.id === sourceQuotationId(id));
                 if (q) reveal(q);
@@ -1717,13 +1757,13 @@ export function App() {
                 }}
                 onRemove={(id) => {
                   checkpoint();
-                  setPreview(null);
+                  previews.send({ type: 'stop' });
                   change((b) => removeEvidence(b, space.id, id));
                 }}
                 onMove={(id, point) => change((b) => moveEvidence(b, space.id, id, point))}
                 onSelect={(id) => {
                   setSelected(space.id);
-                  setActiveQuotation(id);
+                  editing.send({ type: 'selectQuotation', id });
                 }}
                 onCode={showCoding}
                 onReveal={(id) => {
@@ -1731,15 +1771,17 @@ export function App() {
                   if (q) reveal(q);
                 }}
                 onPreview={(id, hover, pin) => {
-                  const key = `${space.id}/${id}`;
+                  const target: PreviewTarget = {
+                    kind: 'evidence',
+                    spaceId: space.id,
+                    quotationId: id,
+                  };
                   if (pin) {
-                    clearTimeout(hoverTimer.current);
-                    setPreview({ id: key, pinned: true, moduleId: space.id });
-                  } else requestHover(key, hover, space.id);
+                    previews.send({ type: 'pin', target });
+                  } else requestHover(target, hover);
                 }}
                 onStop={() => {
-                  clearTimeout(hoverTimer.current);
-                  setPreview(null);
+                  previews.send({ type: 'stop' });
                 }}
                 onVisible={(ids) => reportEvidence(space.id, ids)}
               />
@@ -1775,6 +1817,7 @@ export function App() {
       activeQuotation,
       drawing,
       draft,
+      draftValid,
       visibleKey,
     ],
   );
@@ -1829,7 +1872,7 @@ export function App() {
           <IconButton
             icon={FolderOpen}
             label="Open project backup"
-            disabled={operation || importing || busy.size > 0}
+            disabled={project.state.kind === 'loading' || operation || importing || busy.size > 0}
             onClick={() => archiveInput.current?.click()}
           />
           <IconButton
@@ -2027,14 +2070,14 @@ export function App() {
           target={board.quotations.find((q) => q.id === activeQuotation)!}
           codes={board.codes}
           {...popover}
-          onClose={() => setPopover(null)}
+          onClose={() => editing.send({ type: 'closePopover' })}
           onAssign={assignCode}
           onCreate={addCode}
           onMemo={(memo) => patchQuotation(activeQuotation!, { memo })}
           onEditStart={checkpoint}
           onOpen={() => {
             openCodes(true);
-            setPopover(null);
+            editing.send({ type: 'closePopover' });
           }}
         />
       )}
@@ -2045,7 +2088,7 @@ export function App() {
         >
           {notice ? <CircleAlert size={16} /> : <LoaderCircle size={16} className="spin" />}
           <span>
-            {notice || (operation ? 'Preparing file…' : importing ? 'Adding video…' : working)}
+            {notice || projectMessage(project.state) || (importing ? 'Adding video…' : working)}
           </span>
           {notice && <IconButton icon={X} label="Dismiss message" onClick={() => setNotice('')} />}
         </div>

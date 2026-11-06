@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { usePointerGesture } from './pointer';
 import { clamp, parseTimecode, timecode } from './model';
 
 function TimeField({
@@ -80,7 +81,7 @@ export function RangeEditor({
   label?: string;
   onValidityChange?: (valid: boolean) => void;
 }) {
-  const active = useRef<{ pointer: number; edge: 'start' | 'end' } | null>(null);
+  const { active, finish } = usePointerGesture<{ pointer: number; edge: 'start' | 'end' }>();
   const [validStart, setValidStart] = useState(true),
     [validEnd, setValidEnd] = useState(true);
   useEffect(() => {
@@ -152,7 +153,7 @@ export function RangeEditor({
       <div
         className="range-track"
         onPointerDown={(e) => {
-          if (e.button !== 0) return;
+          if (e.button !== 0 || active.current) return;
           e.preventDefault();
           e.stopPropagation();
           const rect = e.currentTarget.getBoundingClientRect(),
@@ -169,10 +170,13 @@ export function RangeEditor({
         onPointerMove={(e) => pointer(e)}
         onPointerUp={(e) => {
           pointer(e, true);
-          active.current = null;
+          finish(e.pointerId);
         }}
-        onPointerCancel={() => {
-          active.current = null;
+        onPointerCancel={(e) => {
+          finish(e.pointerId);
+        }}
+        onLostPointerCapture={(e) => {
+          finish(e.pointerId);
         }}
       >
         <span

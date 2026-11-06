@@ -5,15 +5,7 @@ import { IconButton } from './Icons';
 import { ModuleGrip, UndockButton, type DockControls } from './ModuleGrip';
 import { RangeEditor } from './RangeEditor';
 import { timecode, type Board, type Code, type Quotation } from './model';
-
-export type RangeDraft = {
-  sourceId: string;
-  parentId: string;
-  start: number;
-  end: number;
-  min: number;
-  max: number;
-};
+import type { RangeDraft } from './editing';
 export function CodeChips({ quotation, codes }: { quotation?: Quotation; codes: Code[] }) {
   return quotation?.codeIds.length ? (
     <span className="code-chips">
@@ -38,6 +30,7 @@ export function Coding({
   board,
   target,
   draft,
+  draftValid,
   dockControls,
   onDrag,
   onClose,
@@ -51,6 +44,7 @@ export function Coding({
   onCollection,
   onDeleteQuotation,
   onDraft,
+  onDraftValidity,
   onSaveDraft,
   onCancelDraft,
   onSource,
@@ -58,6 +52,7 @@ export function Coding({
   board: Board;
   target?: Quotation;
   draft: RangeDraft | null;
+  draftValid: boolean;
   dockControls: DockControls;
   onDrag: (e: PointerEvent) => void;
   onClose: () => void;
@@ -71,6 +66,7 @@ export function Coding({
   onCollection: (codeId: string) => void;
   onDeleteQuotation: (q: Quotation) => void;
   onDraft: (draft: RangeDraft) => void;
+  onDraftValidity: (id: string, valid: boolean) => void;
   onSaveDraft: () => void;
   onCancelDraft: () => void;
   onSource: (id: string) => void;
@@ -79,7 +75,6 @@ export function Coding({
     [newCode, setNewCode] = useState(''),
     [filter, setFilter] = useState<string | null>(null),
     [tab, setTab] = useState<'codes' | 'quotes' | 'sources'>('codes');
-  const [draftValid, setDraftValid] = useState(true);
   const selectedCode = board.codes.find((c) => c.id === filter);
   const query = search.trim().toLocaleLowerCase();
   const results = board.quotations.filter(
@@ -123,7 +118,7 @@ export function Coding({
         onWheel={(e) => e.stopPropagation()}
       >
         {draft && draftSource && (
-          <section className="quotation-editor segment-editor">
+          <section className="quotation-editor segment-editor" key={draft.id}>
             <div className="section-label">
               <Scissors size={11} /> New segment · not saved{' '}
               <IconButton icon={X} label="Cancel segment" onClick={onCancelDraft} />
@@ -137,7 +132,7 @@ export function Coding({
               max={draft.max}
               frames={draftSource.frameTimes}
               onEditStart={() => {}}
-              onValidityChange={setDraftValid}
+              onValidityChange={(valid) => onDraftValidity(draft.id, valid)}
               onChange={(start, end) => onDraft({ ...draft, start, end })}
             />
             <button
@@ -155,7 +150,7 @@ export function Coding({
           </section>
         )}
         {target && !draft && (
-          <section className="quotation-editor" data-editing-quotation={target.id}>
+          <section className="quotation-editor" data-editing-quotation={target.id} key={target.id}>
             <div className="section-label">
               <span>
                 {target.kind === 'video'

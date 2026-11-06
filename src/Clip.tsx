@@ -19,6 +19,7 @@ import { RangeEditor } from './RangeEditor';
 import { clamp, timecode, type ClipCard, type Code, type Quotation, type VideoCard } from './model';
 import { CodeChips } from './Coding';
 import { observeVideoFrames } from './transport';
+import { usePointerGesture } from './pointer';
 
 export function Clip({
   clip,
@@ -78,8 +79,8 @@ export function Clip({
   const element = useRef<HTMLVideoElement | null>(null),
     bounds = useRef(quotation);
   bounds.current = quotation;
-  const pendingSeek = useRef<number | null>(null),
-    scrubbing = useRef<number | null>(null);
+  const pendingSeek = useRef<number | null>(null);
+  const { active: scrubbing, finish } = usePointerGesture<{ pointer: number }>();
   const [time, setTime] = useState(quotation.start),
     [muted, setMuted] = useState(true),
     [playing, setPlaying] = useState(false),
@@ -278,21 +279,24 @@ export function Clip({
         aria-valuenow={time}
         aria-valuetext={timecode(time)}
         onPointerDown={(e) => {
-          if (e.button !== 0) return;
+          if (e.button !== 0 || scrubbing.current) return;
           e.preventDefault();
           e.stopPropagation();
-          scrubbing.current = e.pointerId;
+          scrubbing.current = { pointer: e.pointerId };
           e.currentTarget.setPointerCapture(e.pointerId);
           scrub(e);
         }}
         onPointerMove={(e) => {
-          if (scrubbing.current === e.pointerId) scrub(e);
+          if (scrubbing.current?.pointer === e.pointerId) scrub(e);
         }}
-        onPointerUp={() => {
-          scrubbing.current = null;
+        onPointerUp={(e) => {
+          finish(e.pointerId);
         }}
-        onPointerCancel={() => {
-          scrubbing.current = null;
+        onPointerCancel={(e) => {
+          finish(e.pointerId);
+        }}
+        onLostPointerCapture={(e) => {
+          finish(e.pointerId);
         }}
         onKeyDown={(e) => {
           if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) {

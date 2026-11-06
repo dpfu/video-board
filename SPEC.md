@@ -123,13 +123,66 @@ dragging evidence onto empty board space. Original video bytes and the four
 analytical quotation identities survived. Detailed evidence and compatibility
 limits live in the development notes; release history stays unchanged.
 
-The 6 November test refinement brings current coverage to **78 unit/storage
+The earlier 6 November test refinement brought coverage to **78 unit/storage
 checks and 26 Chromium workflows**. It adds all manual/live transfer combinations,
 legacy ZIP recovery, native drag placement at different zoom/scroll positions,
 same-project restore, preview cleanup after shared coding changes, and decoded
 PNG content for scrolled-out evidence. Playback checks observe an actual loop.
 See [test refinement](docs/DEVELOPMENT.md#test-refinement--6-november-2026) for
 the assertions, test isolation and limits.
+
+## Explicit transitions · 6 November 2026
+
+Daniel requested implementation after the state-machine audit. The focused goal
+is reliable coordination of project operations/background work, preview ownership,
+and evidence editing. Keep the implementation small, in TypeScript, with no new
+state-machine dependency or project-format change. Existing independent player,
+layout, code and quotation data remain independent.
+
+**Implemented plan:**
+
+1. Give project startup and file operations named states and guarded transitions.
+   Opening a ZIP progresses through reading, recovery backup, draining work,
+   atomic storage replacement and installing the restored project. Lock editing
+   during file work and show useful operation messages. A failed pre-commit
+   restore returns to the previous project; a failure after commit reports that
+   the saved restored project must be reopened.
+2. Own queued/running analysis in one cancellable background-job coordinator.
+   Progress belongs to its job. Drain cancelled work before replacing storage;
+   resume pending analysis and interrupted cut detection when replacement fails.
+   Change the project/asset generation only after successful storage replacement.
+   This fixes the reproduced old-board `pending`/zero-jobs/phantom-processing state.
+3. Represent preview ownership as idle, pending hover, hovering or pinned, with
+   typed clip/evidence targets. File operations stop previews and pending hover;
+   delayed callbacks cannot reactivate an obsolete owner. Reconcile removal and
+   code-assignment changes through the same transition path.
+4. Represent quotation focus, drawing and unsaved segment editing as explicit
+   modes. Keep visual module selection separate. Layout/player controls preserve
+   analytical focus; explicit evidence selection changes it. Drawing and segment
+   creation are exclusive. Draft validity belongs to its identified draft, and
+   stale callbacks cannot edit or save a later draft. Project replacement resets
+   the editing context; failed replacement preserves it.
+5. Finish owned pointer gestures consistently on release/cancellation, Escape,
+   lost capture and blur. Ignore other pointers. Keep already-applied movement
+   and range edits; discard an unfinished region rectangle. Guard late region
+   creation after leaving drawing mode.
+6. Add focused transition/job tests and real-media regressions for failed restore
+   recovery, preview shutdown, editing-mode changes and pointer ownership. Run
+   the full suite, inspect the diff, update development notes/changelog and push
+   the verified result to the existing GitHub/Pages target.
+
+The audit's smaller field, cache and animation machines keep their existing
+implementations unless needed by these boundaries. Broader player unification,
+new analysis outcome formats and a rewrite of every local UI state are deferred.
+
+Verification: **97 unit/storage checks and 34 Chromium workflows**. New browser
+cases hold real worker results and fail an atomic replacement to verify automatic
+analysis/cut recovery, then successfully reopen the same pending backup. They
+also cover file-operation preview shutdown, retained editing context after
+rejection, fresh draft validity, capturing during a draft, unfinished rectangle
+cancellation, foreign pointers, Escape, blur and lost capture. The eight new
+workflows passed repeated runs. See [transition implementation](docs/DEVELOPMENT.md#explicit-transitions--6-november-2026)
+for ownership, failure handling and verification limits.
 
 ## Exploratory pass · 5 November 2026
 

@@ -2,6 +2,7 @@ import { useRef, type PointerEvent } from 'react';
 import type { Code, Quotation, Rect } from './model';
 import { clamp } from './model';
 import { normalizedRect } from './analysis';
+import { usePointerGesture } from './pointer';
 
 type Edit = {
   pointer: number;
@@ -31,9 +32,11 @@ export function Regions({
   onEditStart: () => void;
   onDelete: (id: string) => void;
 }) {
-  const active = useRef<Edit | null>(null),
-    canvas = useRef<HTMLDivElement>(null),
+  const canvas = useRef<HTMLDivElement>(null),
     preview = useRef<HTMLDivElement>(null);
+  const { active, finish } = usePointerGesture<Edit>(() => {
+    if (preview.current) preview.current.style.display = 'none';
+  });
   const point = (e: PointerEvent) => {
     const r = canvas.current!.getBoundingClientRect();
     return {
@@ -88,7 +91,7 @@ export function Regions({
       className={`regions ${drawing ? 'regions--draw' : ''}`}
       aria-label="Image regions"
       onPointerDown={(e) => {
-        if (e.button !== 0 || !drawing || e.target !== e.currentTarget) return;
+        if (e.button !== 0 || active.current || !drawing || e.target !== e.currentTarget) return;
         e.preventDefault();
         e.stopPropagation();
         active.current = { pointer: e.pointerId, origin: point(e) };
@@ -101,12 +104,13 @@ export function Regions({
         const rect = update(e);
         if (!active.current.rect && rect && rect.width > 0.01 && rect.height > 0.01)
           onCreate(normalizedRect(rect));
-        active.current = null;
-        if (preview.current) preview.current.style.display = 'none';
+        finish(e.pointerId);
       }}
-      onPointerCancel={() => {
-        active.current = null;
-        if (preview.current) preview.current.style.display = 'none';
+      onPointerCancel={(e) => {
+        finish(e.pointerId);
+      }}
+      onLostPointerCapture={(e) => {
+        finish(e.pointerId);
       }}
     >
       {regions.map((q, i) => {
@@ -133,7 +137,7 @@ export function Regions({
             aria-pressed={selected === q.id}
             title="Arrow keys move · Alt + arrows resize · Delete removes quotation"
             onPointerDown={(e) => {
-              if (e.button !== 0 || drawing) return;
+              if (e.button !== 0 || drawing || active.current) return;
               e.preventDefault();
               e.stopPropagation();
               onSelect(q.id);

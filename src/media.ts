@@ -93,8 +93,11 @@ function run<Task extends MediaTask>(
 }
 
 export const probeVideo = (blob: Blob) => run<'probe'>({ task: 'probe', blob });
-export const analyzeVideo = (blob: Blob, onProgress?: (label: string) => void) =>
-  run<'analyze'>({ task: 'analyze', blob }, onProgress);
+export const analyzeVideo = (
+  blob: Blob,
+  onProgress?: (label: string) => void,
+  signal?: AbortSignal,
+) => run<'analyze'>({ task: 'analyze', blob }, onProgress, signal);
 export const captureFrame = (
   blob: Blob,
   time: number,
@@ -105,5 +108,8 @@ export const captureFrame = (
     undefined,
     options?.signal,
   );
-export const detectScenes = (blob: Blob, onProgress?: (label: string) => void) =>
-  run<'scenes'>({ task: 'scenes', blob }, onProgress);
+export const detectScenes = (
+  blob: Blob,
+  onProgress?: (label: string) => void,
+  signal?: AbortSignal,
+) => run<'scenes'>({ task: 'scenes', blob }, onProgress, signal);

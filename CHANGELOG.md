@@ -23,8 +23,17 @@ qualitative video analysis.
 - Groups, collection memos and arrangements in local storage, Undo and project
   ZIPs. PNG export fits each complete arrangement into its frame, including
   scrolled-out items. Additional views do not duplicate CSV quotation rows.
-- 15 additional unit/storage checks and four real-media browser workflows,
-  bringing the suite to **90 checks**.
+- Expand coverage from 71 to **104 checks: 78 Vitest checks and 26 real-media
+  Chromium workflows**. Include all manual/live transfer combinations, legacy
+  ZIP migration, zoomed/scrolled drops, same-project restore, preview cleanup and
+  decoded PNG content for scrolled-out evidence.
+
+### Changed
+
+- Observe decoded preview frames advancing and looping instead of waiting a
+  fixed time. Monitor runtime/console errors and failed app HTTP responses on
+  every test page, close extra project contexts automatically, and restrict
+  database helpers to the disposable test origin.
 
 ### Compatibility
 

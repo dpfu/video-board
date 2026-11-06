@@ -10,6 +10,7 @@ import {
   expectSynchronized,
   openVideo,
   savedBoard,
+  seedBoard,
   waitSaved,
 } from './helpers';
 
@@ -110,28 +111,11 @@ test('opening Cuts analyses an older video once without replacing its original, 
   const originalHash = await assetHash(page, source.id),
     thumbnailHash = await assetHash(page, source.thumbnails[0]);
   await waitSaved(page);
-  await page.evaluate(async () => {
-    const request = indexedDB.open('video-board', 1);
-    const db = await new Promise<IDBDatabase>((resolve) => {
-      request.onsuccess = () => resolve(request.result);
-    });
-    const tx = db.transaction('boards', 'readwrite'),
-      store = tx.objectStore('boards'),
-      read = store.get('current');
-    read.onsuccess = () => {
-      const board = read.result;
-      delete board.videos[0].scenes;
-      store.put(board, 'current');
-    };
-    await new Promise<void>((resolve, reject) => {
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-    db.close();
-  });
+  const legacy = await savedBoard(page);
+  delete legacy.videos[0].scenes;
   let workers = 0;
   page.on('worker', () => workers++);
-  await page.reload();
+  await seedBoard(page, legacy);
   await expect(page.getByRole('button', { name: 'Add cuts scrubber', exact: true })).toBeVisible();
   await waitSaved(page);
   expect((await savedBoard(page)).videos[0].scenes).toBeUndefined();

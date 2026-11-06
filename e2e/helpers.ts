@@ -1,68 +1,143 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { test as base, expect, type Locator, type Page } from '@playwright/test';
-import type { Board } from '../src/model';
+import {
+  test as base,
+  expect,
+  type BrowserContext,
+  type Locator,
+  type Page,
+} from '@playwright/test';
+import type { Board, PersistedBoard } from '../src/model';
+import { validateBoard } from '../src/validation';
+import { testAppURL } from './test-settings';
 
 export const fixturePath = fileURLToPath(new URL('./fixtures/synthetic.webm', import.meta.url));
 
 // Fresh Playwright contexts and port 4193 keep all test data off the working origin.
-export const test = base.extend<{ browserErrors: string[] }>({
+function monitorContext(context: BrowserContext, errors: string[]) {
+  const origin = new URL(testAppURL).origin;
+  const observe = (page: Page) => {
+    page.on('pageerror', (error) => errors.push(`${page.url()}: ${error.message}`));
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(`${page.url()}: ${message.text()}`);
+    });
+    page.on('response', (response) => {
+      if (response.status() >= 400 && new URL(response.url()).origin === origin)
+        errors.push(`HTTP ${response.status()}: ${response.url()}`);
+    });
+  };
+  context.pages().forEach(observe);
+  context.on('page', observe);
+}
+
+export const test = base.extend<{
+  browserErrors: string[];
+  newProjectPage: () => Promise<Page>;
+}>({
   browserErrors: [
-    async ({ page }, use) => {
+    async ({ context }, use) => {
       const errors: string[] = [];
-      page.on('pageerror', (error) => errors.push(error.message));
-      page.on('console', (message) => {
-        if (message.type() === 'error') errors.push(message.text());
-      });
-      await use(errors);
-      expect(errors, 'No browser/runtime errors').toEqual([]);
+      monitorContext(context, errors);
+      try {
+        await use(errors);
+      } finally {
+        expect(errors, 'No runtime, console or failed HTTP responses in any test page').toEqual([]);
+      }
     },
     { auto: true },
   ],
+  newProjectPage: async ({ browser, browserErrors, baseURL, viewport }, use) => {
+    const contexts: BrowserContext[] = [];
+    try {
+      await use(async () => {
+        const context = await browser.newContext({ baseURL, viewport });
+        contexts.push(context);
+        monitorContext(context, browserErrors);
+        return context.newPage();
+      });
+    } finally {
+      await Promise.all(contexts.map((context) => context.close()));
+    }
+  },
 });
 export { expect };
 
-export async function savedBoard(page: Page): Promise<Board> {
-  return page.evaluate(async () => {
+type DatabaseTask =
+  { kind: 'board' } | { kind: 'hash'; key: string } | { kind: 'seed'; board: PersistedBoard };
+
+async function testDatabase(page: Page, task: DatabaseTask) {
+  const url = new URL(page.url()),
+    target = new URL(testAppURL);
+  if (url.origin !== target.origin || !url.pathname.startsWith(target.pathname))
+    throw new Error(`Test database access is restricted to ${testAppURL}; received ${page.url()}.`);
+  return page.evaluate(async (task) => {
     const request = indexedDB.open('video-board', 1);
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
+      request.onblocked = () => reject(new Error('The test database is blocked.'));
     });
     try {
-      return await new Promise<Board>((resolve, reject) => {
-        const read = db.transaction('boards').objectStore('boards').get('current');
-        read.onsuccess = () => resolve(read.result);
-        read.onerror = () => reject(read.error);
-      });
+      const read = <T>(store: 'boards' | 'assets', key: string) =>
+        new Promise<T>((resolve, reject) => {
+          const tx = db.transaction(store),
+            request = tx.objectStore(store).get(key);
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+          tx.onabort = () => reject(tx.error || new Error('The test database read was aborted.'));
+        });
+      if (task.kind === 'seed') {
+        const tx = db.transaction('boards', 'readwrite');
+        tx.objectStore('boards').put(task.board, 'current');
+        await new Promise<void>((resolve, reject) => {
+          tx.oncomplete = () => resolve();
+          tx.onabort = () => reject(tx.error || new Error('The test fixture could not be saved.'));
+          tx.onerror = () => reject(tx.error);
+        });
+        return;
+      }
+      const board = await read<Board | undefined>('boards', 'current');
+      if (task.kind === 'board') return board;
+      const id = board?.stills.find((still) => still.id === task.key)?.assetId || task.key;
+      const blob = await read<Blob | undefined>('assets', id);
+      if (!blob) throw new Error(`Missing test media asset: ${id}`);
+      const hash = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+      return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, '0')).join(
+        '',
+      );
     } finally {
       db.close();
     }
-  });
+  }, task);
 }
 
-export async function assetHash(page: Page, key: string) {
-  return page.evaluate(async (key) => {
-    const request = indexedDB.open('video-board', 1);
-    const db = await new Promise<IDBDatabase>((resolve) => {
-      request.onsuccess = () => resolve(request.result);
-    });
-    try {
-      const board = await new Promise<Board>((resolve) => {
-        const read = db.transaction('boards').objectStore('boards').get('current');
-        read.onsuccess = () => resolve(read.result);
-      });
-      const assetId = board?.stills.find((s) => s.id === key)?.assetId || key;
-      const blob = await new Promise<Blob>((resolve) => {
-        const read = db.transaction('assets').objectStore('assets').get(assetId);
-        read.onsuccess = () => resolve(read.result);
-      });
-      const hash = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
-      return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, '0')).join('');
-    } finally {
-      db.close();
-    }
-  }, key);
+export async function savedBoard(page: Page): Promise<Board> {
+  let board: Board | undefined;
+  await expect
+    .poll(
+      async () => {
+        const value = await testDatabase(page, { kind: 'board' });
+        board = typeof value === 'object' ? value : undefined;
+        return !!board;
+      },
+      { message: 'A board has been persisted in the disposable test database' },
+    )
+    .toBe(true);
+  return board!;
+}
+
+export async function assetHash(page: Page, key: string): Promise<string> {
+  return (await testDatabase(page, { kind: 'hash', key })) as string;
+}
+
+/** Replace metadata in this test context only, retaining its generated media. */
+export async function seedBoard(page: Page, board: PersistedBoard) {
+  validateBoard(board);
+  await waitSaved(page);
+  await testDatabase(page, { kind: 'seed', board });
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Add videos', exact: true })).toBeEnabled();
+  await waitSaved(page);
 }
 
 export async function openVideo(page: Page) {

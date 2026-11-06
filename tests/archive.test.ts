@@ -2,7 +2,14 @@ import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
 import { backupBoard, restoreArchive } from '../src/archive';
 import { quotation } from '../src/analysis';
-import { assetKeys, migrateBoard, type Board, type LegacyBoard, type V2Board } from '../src/model';
+import {
+  assetKeys,
+  migrateBoard,
+  type Board,
+  type LegacyBoard,
+  type V2Board,
+  type V3Board,
+} from '../src/model';
 import { validateBoard } from '../src/validation';
 import { boardFixture } from './board';
 
@@ -13,7 +20,9 @@ describe('project validation', () => {
     const v2: V2Board = { ...base, version: 2 };
     const { tracks: _t, ...old } = v2;
     const v1: LegacyBoard = { ...old, version: 1 };
-    for (const board of [v1, v2, current]) {
+    const { spaces: _spaces, ...v3Base } = current;
+    const v3: V3Board = { ...v3Base, version: 3 };
+    for (const board of [v1, v2, v3, current]) {
       const before = structuredClone(board);
       expect(() => validateBoard(board)).not.toThrow();
       expect(board).toEqual(before);
@@ -91,6 +100,38 @@ describe('project validation', () => {
 });
 
 describe('portable ZIP archives', () => {
+  it.each([1, 2, 3] as const)(
+    'restores a v%s ZIP with original bytes and migrates its evidence',
+    async (version) => {
+      const current = boardFixture();
+      const { spaces: _s, ...v3Base } = current;
+      const v3: V3Board = { ...v3Base, version: 3 };
+      const { clips: _c, panels: _p, codes: _codes, quotations: _q, ...v2Base } = v3;
+      const v2: V2Board = { ...v2Base, version: 2 };
+      const { tracks: _t, ...v1Base } = v2;
+      const v1: LegacyBoard = { ...v1Base, version: 1 };
+      const old = version === 1 ? v1 : version === 2 ? v2 : v3;
+      const before = structuredClone(old);
+      const zip = new JSZip();
+      zip.file('board.json', JSON.stringify(old));
+      zip.file('assets/video', 'original video');
+      zip.file('assets/still', 'original still');
+      const restored = await restoreArchive(await zip.generateAsync({ type: 'blob' }));
+      expect(old).toEqual(before);
+      expect(restored.board.version).toBe(4);
+      expect(restored.board.spaces).toEqual([]);
+      expect(restored.board.videos).toEqual(old.videos);
+      expect(restored.board.stills.map((still) => [still.id, still.time, still.duration])).toEqual(
+        old.stills.map((still) => [still.id, still.time, still.duration]),
+      );
+      expect(restored.board.quotations.map((q) => q.id)).toEqual(['source-video', 'frame-still']);
+      if (version === 3) expect(restored.board.quotations).toEqual(v3.quotations);
+      expect(await restored.assets.get('video')!.text()).toBe('original video');
+      expect(await restored.assets.get('still')!.text()).toBe('original still');
+      validateBoard(restored.board);
+    },
+  );
+
   it('roundtrips original bytes, shared still assets and quotation identities without IndexedDB', async () => {
     const board = boardFixture();
     board.stills.push({ ...board.stills[0], id: 'second-view', assetId: 'still' });

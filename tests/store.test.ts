@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, expect, it, vi } from 'vitest';
+import { openDB } from 'idb';
 import { emptyBoard } from '../src/model';
 import { loadBoard, replaceBoard, saveAssets, saveBoard } from '../src/store';
 import { boardFixture } from './board';
@@ -22,6 +23,78 @@ it('reloads media and dock geometry from storage, rather than relying on in-memo
   expect(loaded.board).toEqual(boardFixture());
   expect(await loaded.assets.get('video')!.text()).toBe('original bytes');
   expect(await loaded.assets.get('still')!.text()).toBe('still bytes');
+});
+
+it('loads a saved v3 project without losing its quotations or original media', async () => {
+  const current = boardFixture();
+  await replaceBoard(
+    current,
+    new Map([
+      ['video', new Blob(['keep original'])],
+      ['still', new Blob(['keep frame'])],
+    ]),
+  );
+  const { spaces: _, ...base } = current;
+  const legacy = { ...base, version: 3 as const };
+  const db = await openDB('video-board', 1);
+  try {
+    await db.put('boards', legacy, 'current');
+  } finally {
+    db.close();
+  }
+  const loaded = await loadBoard();
+  expect(loaded.board).toEqual({ ...legacy, version: 4, spaces: [] });
+  expect(await loaded.assets.get('video')!.text()).toBe('keep original');
+  expect(await loaded.assets.get('still')!.text()).toBe('keep frame');
+});
+
+it('reconciles stored live membership while preserving positions, memos and evidence identities', async () => {
+  const board = boardFixture();
+  board.codes = [{ id: 'review', name: 'Review', color: '#b7cde5', definition: '' }];
+  board.quotations[0].codeIds = ['review'];
+  board.quotations.push({
+    ...board.quotations[0],
+    id: 'new-range',
+    kind: 'range',
+    start: 1,
+    end: 2,
+    parentId: board.quotations[0].id,
+  });
+  board.spaces = [
+    {
+      id: 'live',
+      kind: 'space',
+      codeId: 'review',
+      name: '',
+      memo: 'Keep this interpretation.',
+      x: 0,
+      y: 0,
+      width: 700,
+      height: 540,
+      z: 1,
+      items: [
+        { quotationId: 'frame-still', x: 12, y: 12 },
+        { quotationId: 'source-video', x: 320, y: 210 },
+      ],
+    },
+  ];
+  const before = structuredClone(board);
+  await replaceBoard(
+    board,
+    new Map([
+      ['video', new Blob(['keep original'])],
+      ['still', new Blob(['keep frame'])],
+    ]),
+  );
+  const loaded = (await loadBoard()).board!;
+  expect(board).toEqual(before);
+  expect(loaded.spaces[0].items.map((item) => item.quotationId)).toEqual([
+    'source-video',
+    'new-range',
+  ]);
+  expect(loaded.spaces[0].items[0]).toEqual(before.spaces[0].items[1]);
+  expect(loaded.spaces[0].memo).toBe(before.spaces[0].memo);
+  expect(loaded.quotations).toEqual(before.quotations);
 });
 
 it('keeps the previous project and original media when a replacement fails after clearing assets', async () => {

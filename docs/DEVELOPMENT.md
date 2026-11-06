@@ -41,7 +41,7 @@ For a shorter iteration, use `npm test` or `npm run test:watch`; `npm run test:e
 builds and runs just the browser workflows. Browser tests start a separate server
 on **4193** and use fresh contexts, leaving the working board on **5193** alone.
 
-- **68 Vitest checks:** group movement, detaching, independent resizing, docking
+- **78 Vitest checks:** group movement, detaching, independent resizing, docking
   on four sides and at different zoom levels, legacy v1 migration, persistence
   and atomic rollback after a simulated storage failure; native FFmpeg score
   parity on 8/10-bit sequences, reusable buffers, geometry changes, 16-bit
@@ -52,9 +52,10 @@ on **4193** and use fresh contexts, leaving the working board on **5193** alone.
   byte-identical ZIP roundtrips without IndexedDB, shared frame/asset consistency,
   12,000-deep quotation chains/cycle rejection, worker construction/posting/error/
   progress/abort cleanup and native/fallback playback-clock disposal; v3-to-v4
-  migration, live membership/placement, manual transfers, promotion/reuse,
-  independent view removal, space docking/visibility and validated ZIP recovery.
-- **22 Chromium workflows:** real-media import and analysis; synchronized resized
+  migration, live membership/placement, all four manual/live transfer combinations,
+  same-space idempotence, promotion/reuse, independent view removal, space docking/
+  visibility, stored-membership reconciliation and v1/v2/v3 ZIP migration.
+- **26 Chromium workflows:** real-media import and analysis; synchronized resized
   scrubbers and exact linked-still recapture; magnetic group interactions, Undo
   and reload; ZIP roundtrip, rejected incomplete backups and offscreen PNG export;
   known-cut detection, cached threshold adjustment, shot seeking and older boards;
@@ -71,7 +72,10 @@ on **4193** and use fresh contexts, leaving the working board on **5193** alone.
   group arrangement/movement/resizing, keyboard placement, atomic promotion/Undo,
   native code dragging, assignment/rename updates, mixed clip/region collections,
   closing a still view and recovering its frame/source, fresh v4 ZIP restore and
-  PNG, plus bounded rendering/one-preview playback in a 250-quotation collection.
+  PNG, plus bounded rendering/one-preview playback in a 250-quotation collection;
+  zoomed/scrolled native transfers and drag-out grouping, decoded PNG content for
+  scrolled-out evidence, same-project restore with refreshed covers, and pinned
+  preview cleanup after external coding/deletion.
 
 The versioned [synthetic fixture](../e2e/fixtures/README.md) contains no private media.
 Browser workflows use the actual decoder, workers and IndexedDB. The unit storage
@@ -81,7 +85,12 @@ under ignored `tmp/playwright/`; open the HTML report with
 The development watcher excludes `tmp/`: generating HTML reports/traces there
 must not reload an active demo or discard its transient selection/draft.
 
-Verified on **bugglzwerg, 6 November 2026** after the evidence-space implementation:
+Verified on **bugglzwerg, 6 November 2026** after the test-suite refinement:
+`npm run check` passed formatting, **104 checks** and the production build. The
+five playback/new-regression workflows also passed two consecutive repetitions.
+See the test-refinement section below for the assertions and their limits.
+
+Previously verified on **bugglzwerg, 6 November 2026** after the evidence-space implementation:
 `npm run check` passed formatting, **90 checks** and the production build. The
 browser portion took about 66 seconds. See the evidence-space section below for
 the workflow, manual QA and project-format compatibility.
@@ -113,6 +122,44 @@ pre-detector suite passed 18 checks in about 11 seconds after correcting a runne
 viewport mismatch.
 Automated coverage currently targets Chromium with VP9/Opus, not a codec/browser
 compatibility matrix.
+
+## Test refinement · 6 November 2026
+
+The suite now observes decoded preview frames advancing and wrapping to the clip
+in-point. This replaces a fixed sleep that could pass without proving a loop.
+It retains the existing 100 ms browser-transport tolerance; it does not assert
+frame-exact playback. The PNG regression decodes the downloaded file and checks
+for the generated fixture's saturated image pixels in upper and lower bands,
+including a quotation whose tile is scrolled out of the DOM. This checks image
+content without depending on platform fonts or a full-page pixel snapshot.
+
+Native drag tests cover 60% and 130% board zoom with a destination scrolled on
+both axes, then dragging out to a new group. They verify pointer placement and
+unchanged quotation identities/coding. Same-session ZIP reopen uses identical
+quotation/space IDs, checks refreshed exact-frame covers and unchanged original
+bytes, and retains arrangements and memos. Removing coding through the shared
+popover must release a pinned preview so another quotation can play; deleting a
+quotation must leave no stale collection tile or player. Unit/storage checks
+cover all four manual/live transfer combinations, duplicate same-space drops,
+stored-membership reconciliation, and actual v1/v2/v3 ZIP migration.
+
+All project pages, including fresh restore contexts, share runtime/console and
+same-origin HTTP error monitoring. Extra contexts close through fixture cleanup.
+Database read/seed helpers reject access outside the configured disposable app
+URL on 4193, handle request/transaction failures, and wait for saved state before
+reloading seeded metadata. Fixture builders retain the imported generated media.
+No application code, dependencies or native FFmpeg reference scores changed.
+
+For focused iteration after a build:
+
+```sh
+npx playwright test e2e/space-reliability.spec.ts
+npx playwright test e2e/space-reliability.spec.ts --repeat-each=2
+```
+
+The complete suite remains `npm run check`. Browser coverage is Chromium with
+generated WebM; these regressions do not establish codec coverage, decoding
+throughput or a new performance benchmark.
 
 ## Evidence spaces · 6 November 2026
 

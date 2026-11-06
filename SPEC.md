@@ -112,7 +112,7 @@ This adds a shared evidence-space model rather than a second quotation store.
 Nested groups, code hierarchies, automatic spatial inference, synchronized
 comparison and segmentation are outside this iteration.
 
-Verification: **68 unit/storage checks and 22 real-media Chromium workflows**.
+Initial verification: **68 unit/storage checks and 22 real-media Chromium workflows**.
 The new workflows cover native code drag, manual arrangement, atomic promotion
 and Undo, assignment/rename updates, closing collections without deleting data,
 retimed regions, exact preview/source recovery after closing a still view,
@@ -122,6 +122,14 @@ walkthrough verified quotation-list dragging, manual group transfers and
 dragging evidence onto empty board space. Original video bytes and the four
 analytical quotation identities survived. Detailed evidence and compatibility
 limits live in the development notes; release history stays unchanged.
+
+The 6 November test refinement brings current coverage to **78 unit/storage
+checks and 26 Chromium workflows**. It adds all manual/live transfer combinations,
+legacy ZIP recovery, native drag placement at different zoom/scroll positions,
+same-project restore, preview cleanup after shared coding changes, and decoded
+PNG content for scrolled-out evidence. Playback checks observe an actual loop.
+See [test refinement](docs/DEVELOPMENT.md#test-refinement--6-november-2026) for
+the assertions, test isolation and limits.
 
 ## Exploratory pass · 5 November 2026
 

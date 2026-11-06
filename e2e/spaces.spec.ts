@@ -1,7 +1,18 @@
 import type { Locator, Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import JSZip from 'jszip';
-import { test, expect, assetHash, box, dragBy, openVideo, savedBoard, waitSaved } from './helpers';
+import { collectionFixture } from './board-fixtures';
+import {
+  test,
+  expect,
+  assetHash,
+  box,
+  dragBy,
+  openVideo,
+  savedBoard,
+  seedBoard,
+  waitSaved,
+} from './helpers';
 
 async function newGroup(page: Page, name: string) {
   await page.getByRole('button', { name: 'New evidence group', exact: true }).click();
@@ -98,63 +109,12 @@ test('provisional groups arrange shared evidence, move and resize together, prom
   expect((await savedBoard(page)).spaces).toEqual(saved.spaces);
 });
 
-test('large live collections keep rendering and decoding bounded while scrolling and previewing', async ({
+test('large live collections virtualize evidence and retain a pinned preview while scrolling', async ({
   page,
 }) => {
   await openVideo(page);
   await waitSaved(page);
-  const board = await savedBoard(page);
-  const sourceQuote = board.quotations[0];
-  board.videos[0].hidden = true;
-  board.tracks = [];
-  board.codes = [{ id: 'review', name: 'Review', color: '#b7cde5', definition: '' }];
-  board.quotations = [
-    sourceQuote,
-    ...Array.from({ length: 250 }, (_, index) => ({
-      ...sourceQuote,
-      id: `excerpt-${index}`,
-      kind: 'range' as const,
-      title: `Excerpt ${String(index).padStart(3, '0')}`,
-      start: 1,
-      end: 2,
-      parentId: sourceQuote.id,
-      codeIds: ['review'],
-    })),
-  ];
-  board.spaces = [
-    {
-      id: 'review-space',
-      kind: 'space',
-      name: '',
-      memo: '',
-      codeId: 'review',
-      items: [],
-      x: 80,
-      y: 50,
-      width: 700,
-      height: 540,
-      z: 10,
-    },
-  ];
-  board.camera = { x: 0, y: 0, scale: 1 };
-  // This test context owns its generated-media database; no working profile is used.
-  await page.evaluate(async (board) => {
-    const request = indexedDB.open('video-board', 1);
-    const db = await new Promise<IDBDatabase>((resolve) => {
-      request.onsuccess = () => resolve(request.result);
-    });
-    try {
-      const tx = db.transaction('boards', 'readwrite');
-      tx.objectStore('boards').put(board, 'current');
-      await new Promise<void>((resolve, reject) => {
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      });
-    } finally {
-      db.close();
-    }
-  }, board);
-  await page.reload();
+  await seedBoard(page, collectionFixture(await savedBoard(page), 250));
   const space = page.locator('.space-card');
   await expect(space.locator('.space-count')).toHaveText('250 quotations');
   await expect.poll(() => space.locator('.evidence-tile').count()).toBeLessThan(18);
@@ -236,7 +196,7 @@ test('a code opens by button or native drag, follows assignments and renames, an
 
 test('mixed region and clip evidence stays linked through retiming, copying out, promotion reuse, PNG and fresh ZIP restore', async ({
   page,
-  browser,
+  newProjectPage,
 }, testInfo) => {
   test.setTimeout(60_000);
   const source = await openVideo(page);
@@ -333,23 +293,15 @@ test('mixed region and clip evidence stays linked through retiming, copying out,
   await (await backupDownload).saveAs(backupPath);
   const zip = await JSZip.loadAsync(await readFile(backupPath));
   expect(zip.filter((path) => path === `assets/${source.id}`)).toHaveLength(1);
-  const restoredContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
-  try {
-    const restored = await restoredContext.newPage();
-    const errors: string[] = [];
-    restored.on('pageerror', (error) => errors.push(error.message));
-    await restored.goto(page.url());
-    await restored.locator('input[type=file][accept=".zip"]').setInputFiles(backupPath);
-    await expect(restored.locator('.space-card')).toHaveCount(2);
-    await waitSaved(restored);
-    const reopened = await savedBoard(restored);
-    expect(reopened.version).toBe(4);
-    expect(reopened.spaces).toEqual(state.spaces);
-    expect(reopened.quotations).toEqual(state.quotations);
-    expect(reopened.codes).toEqual(state.codes);
-    expect(await assetHash(restored, source.id)).toBe(originalHash);
-    expect(errors).toEqual([]);
-  } finally {
-    await restoredContext.close();
-  }
+  const restored = await newProjectPage();
+  await restored.goto('./');
+  await restored.locator('input[type=file][accept=".zip"]').setInputFiles(backupPath);
+  await expect(restored.locator('.space-card')).toHaveCount(2);
+  await waitSaved(restored);
+  const reopened = await savedBoard(restored);
+  expect(reopened.version).toBe(4);
+  expect(reopened.spaces).toEqual(state.spaces);
+  expect(reopened.quotations).toEqual(state.quotations);
+  expect(reopened.codes).toEqual(state.codes);
+  expect(await assetHash(restored, source.id)).toBe(originalHash);
 });

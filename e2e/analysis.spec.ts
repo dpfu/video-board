@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import JSZip from 'jszip';
+import { expectPreviewLoop } from './media-assertions';
 import {
   test,
   expect,
@@ -39,12 +40,7 @@ test('shot clips preview silently and independently; duplicate views share codin
     .poll(() => clip.locator('video').evaluate((el) => !(el as HTMLVideoElement).paused))
     .toBe(true);
   expect(await clip.locator('video').evaluate((el) => (el as HTMLVideoElement).muted)).toBe(true);
-  await page.waitForTimeout(1250);
-  const previewTime = await clip
-    .locator('video')
-    .evaluate((el) => (el as HTMLVideoElement).currentTime);
-  expect(previewTime).toBeGreaterThanOrEqual(2);
-  expect(previewTime).toBeLessThan(3.1);
+  await expectPreviewLoop(clip.locator('video'), 2, 3);
   expect(
     await page.locator('.video-card video').evaluate((el) => (el as HTMLVideoElement).currentTime),
   ).toBeCloseTo(sourceTime, 2);

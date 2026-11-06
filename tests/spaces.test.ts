@@ -97,23 +97,50 @@ describe('linked evidence spaces', () => {
     expect(overlaps).toBe(false);
   });
 
-  it('moves between provisional groups, copies out of live collections, and never duplicates quotations or media', () => {
-    let board = fixture();
-    board.spaces = [group('first'), group('second'), group('live', 'attention')];
-    const beforeAssets = assetKeys(board);
-    board = addEvidence(board, 'first', 'region');
-    board = addEvidence(board, 'second', 'region', { x: 50, y: 40 }, 'first');
-    expect(board.spaces[0].items).toEqual([]);
-    expect(board.spaces[1].items).toEqual([{ quotationId: 'region', x: 50, y: 40 }]);
-    expect(board.quotations.find((q) => q.id === 'region')!.codeIds).toEqual([]);
-    board = addEvidence(board, 'live', 'region');
-    board = addEvidence(board, 'first', 'region', undefined, 'live');
-    expect(board.spaces[0].items).toHaveLength(1);
-    expect(board.spaces[2].items).toHaveLength(1);
-    expect(board.quotations.find((q) => q.id === 'region')!.codeIds).toEqual(['attention']);
-    expect(board.quotations).toHaveLength(4);
-    expect(assetKeys(board)).toEqual(beforeAssets);
-  });
+  it.each([
+    { fromLive: false, toLive: false, label: 'manual → manual' },
+    { fromLive: false, toLive: true, label: 'manual → live' },
+    { fromLive: true, toLive: false, label: 'live → manual' },
+    { fromLive: true, toLive: true, label: 'live → live' },
+  ])(
+    '$label preserves evidence and applies only the destination coding',
+    ({ fromLive, toLive }) => {
+      let board = fixture();
+      board.codes.push({ id: 'contrast', name: 'Contrast', color: '#d9b5c8', definition: '' });
+      board.quotations.find((q) => q.id === 'region')!.codeIds = ['attention'];
+      board.spaces = [
+        group('from', fromLive ? 'attention' : undefined),
+        group('to', toLive ? 'contrast' : undefined),
+      ];
+      board = addEvidence(board, 'from', 'region');
+      const before = structuredClone(board);
+      const next = addEvidence(board, 'to', 'region', { x: 50, y: 40 }, 'from');
+      expect(board).toEqual(before);
+      expect(next.spaces[0].items).toHaveLength(fromLive ? 1 : 0);
+      expect(next.spaces[1].items).toEqual([{ quotationId: 'region', x: 50, y: 40 }]);
+      expect(next.quotations.find((q) => q.id === 'region')).toMatchObject({
+        ...before.quotations.find((q) => q.id === 'region'),
+        codeIds: toLive ? ['attention', 'contrast'] : ['attention'],
+        updatedAt: expect.any(String),
+      });
+      expect(next.quotations.map((q) => q.id)).toEqual(before.quotations.map((q) => q.id));
+      expect(assetKeys(next)).toEqual(assetKeys(before));
+    },
+  );
+
+  it.each([false, true])(
+    'dropping an existing member into its own space is idempotent (live = %s)',
+    (live) => {
+      let board = fixture();
+      board.spaces = [group('space', live ? 'attention' : undefined)];
+      board = addEvidence(board, 'space', 'region', { x: 303, y: 215 });
+      const before = structuredClone(board);
+      const next = addEvidence(board, 'space', 'region', undefined, 'space');
+      expect(next).toEqual(before);
+      expect(next.spaces[0].items).toHaveLength(1);
+      expect(board).toEqual(before);
+    },
+  );
 
   it('promotes with explicit case-insensitive reuse, keeping memos, other codes and existing matches', () => {
     let board = fixture();

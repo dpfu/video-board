@@ -41,7 +41,7 @@ For a shorter iteration, use `npm test` or `npm run test:watch`; `npm run test:e
 builds and runs just the browser workflows. Browser tests start a separate server
 on **4193** and use fresh contexts, leaving the working board on **5193** alone.
 
-- **116 Vitest checks:** group movement, detaching, independent resizing, docking
+- **124 Vitest checks:** group movement, detaching, independent resizing, docking
   on four sides and at different zoom levels, legacy v1 migration, persistence
   and atomic rollback after a simulated storage failure; native FFmpeg score
   parity on 8/10-bit sequences, reusable buffers, geometry changes, 16-bit
@@ -61,8 +61,10 @@ on **4193** and use fresh contexts, leaving the working board on **5193** alone.
   serial save ordering/failure recovery, draining/disposal, transactional URL
   allocation/revocation, exclusive short tasks, Undo's analysis/camera policy,
   cancelled import probes, native playback seek/loop/promise/listener cleanup,
-  effect replay and retained seek/playback intent.
-- **38 Chromium workflows:** real-media import and analysis; synchronized resized
+  effect replay and retained seek/playback intent; spatial-index parity at negative,
+  cell-edge and oversized coordinates, cached snap/full-scan parity for assemblies
+  and collisions across four zoom levels, stable ties and camera overscan bounds.
+- **41 Chromium workflows:** real-media import and analysis; synchronized resized
   scrubbers and exact linked-still recapture; magnetic group interactions, Undo
   and reload; ZIP roundtrip, rejected incomplete backups and offscreen PNG export;
   known-cut detection, cached threshold adjustment, shot seeking and older boards;
@@ -88,7 +90,10 @@ on **4193** and use fresh contexts, leaving the working board on **5193** alone.
   fresh draft validity and media capture, unfinished rectangle cancellation,
   foreign pointer releases, Escape, blur and lost capture; paused activation by
   inactive-clip scrubbing, edited-boundary playback, shared time-field rejection/
-  Escape/retiming, autosave failure and next-edit recovery, and board capture loss.
+  Escape/retiming, autosave failure and next-edit recovery, and board capture loss;
+  held movement with live connectors and bounded React commits, mid-gesture Undo,
+  newly exposed evidence before pan release, grid/zoom alignment and immediate
+  reset, native-scroll isolation, and backups of the latest live geometry.
 
 The versioned [synthetic fixture](../e2e/fixtures/README.md) contains no private media.
 Browser workflows use the actual decoder, workers and IndexedDB. The unit storage
@@ -98,7 +103,15 @@ under ignored `tmp/playwright/`; open the HTML report with
 The development watcher excludes `tmp/`: generating HTML reports/traces there
 must not reload an active demo or discard its transient selection/draft.
 
-Verified on **bugglzwerg, 7 November 2026** after the full application refactor:
+Verified on **bugglzwerg, 7 November 2026** after the interaction-speed pass:
+`npm run check` passed formatting, **124 unit/storage checks, 41 Chromium workflows**,
+TypeScript and the production build. Reviewed the generated-media coding screenshot;
+the camera, fixed controls, linked stills and Codes panel remain aligned. The
+12 affected coding/space/continuous-interaction workflows also passed separately.
+Production measurements and their limits are recorded in the interaction-speed
+section below.
+
+Previously verified on **bugglzwerg, 7 November 2026** after the full application refactor:
 `npm run check` passed formatting, **116 unit/storage checks, 38 Chromium workflows**
 and the production build. The new inactive-clip scrub/loop workflow also passed
 two consecutive repetitions. Reviewed generated-media board screenshots and
@@ -147,6 +160,87 @@ pre-detector suite passed 18 checks in about 11 seconds after correcting a runne
 viewport mismatch.
 Automated coverage currently targets Chromium with VP9/Opus, not a codec/browser
 compatibility matrix.
+
+## Interaction speed · 7 November 2026
+
+Against the completed refactor (`b7cce92`), dragging uses **13.5–14.8× less
+JavaScript** and **2.3–3.1× less total main-thread task time** in the measured
+120/240/2,400-clip workloads. Panning uses 5.5–9.2× less JavaScript and 1.3–1.6×
+less task time. This meets the requested 10× target for dragging's JavaScript
+work, not for overall elapsed interaction time or the whole app.
+
+| Clips / gesture | Script ms, before → after | Script reduction | Main-thread task ms, before → after | Elapsed s, before → after | P95 frame ms, before → after |
+| --- | --- | --- | --- | --- | --- |
+| 120 / pan | 25.67 → 4.63 | 5.5× | 124.7 → 98.9 | 1.485 → 1.690 | 25.1 → 26.9 |
+| 120 / drag | 93.35 → 6.90 | 13.5× | 201.6 → 88.5 | 1.527 → 1.507 | 26.6 → 25.9 |
+| 240 / pan | 30.22 → 4.52 | 6.7× | 136.9 → 99.0 | 1.518 → 1.644 | 27.0 → 27.0 |
+| 240 / drag | 98.99 → 7.10 | 13.9× | 205.4 → 90.1 | 1.546 → 1.506 | 27.0 → 25.6 |
+| 2,400 / pan | 49.50 → 5.35 | 9.2× | 153.6 → 97.0 | 1.579 → 1.631 | 26.1 → 27.0 |
+| 2,400 / drag | 158.53 → 10.71 | 14.8× | 273.5 → 87.4 | 1.490 → 1.545 | 26.6 → 26.9 |
+
+Protocol: unchanged `scripts/benchmark.mjs`, production builds on bugglzwerg
+(Apple M4/macOS arm64), Chromium **147.0.7727.15**, 1440×1000 viewport, reduced
+motion, one warm-up plus three measured trials per gesture/size. Use the same
+generated four-second video, original docked Frames/Audio tracks, 12-column clip
+layout and four shared cover keys; 15 modules remain mounted. A trial sends 60
+real pointer moves around an oval and awaits an animation frame after each;
+timing includes release and two more frames, including final React publication.
+The table reports medians of per-trial CDP `ScriptDuration`/`TaskDuration` deltas,
+elapsed time and each trial's P95 frame interval. Tests and benchmarks ran
+separately, with no concurrent build/test workload during these measurements.
+
+The frame-paced driver workload remains around 1.5–1.7 seconds; P95 frames do
+not improve materially, and pan elapsed time increased **3–14%**. The gain is less
+JavaScript/main-thread work per interaction, not a demonstrated elapsed-time or
+input-latency speedup. These warm, mostly offscreen synthetic boards do not
+measure video decoding, cut detection, cold import, all-cards-visible rendering,
+long research recordings or other browsers.
+
+Raw local reports: ignored `tmp/performance/speed-baseline.json` and
+`tmp/performance/speed-final.json`. The optimized build was measured before its
+commit, so both reports carry parent revision `b7cce92`; bundle identity
+distinguishes them. Baseline is `index-N3hlZVaI.js`, SHA-256
+`846bd850cffb8496b55c39bb74514508d75e2ddd91441d0e34c89e470b6df829`.
+Final is `index-4uoSVXC_.js`, SHA-256
+`23b21c2a55ee5998ac593c1a74a8ad31ccc7292c1163bdcf6ef8d8b2382bf915`
+(390.07 kB / 123.38 kB gzip, versus 385.03 / 121.66). CSS is
+`index-DwBkubLe.css` (35.94 kB / 8.51 kB gzip); the media-worker bundle is unchanged.
+Rerun separately from browser tests:
+
+```sh
+npm run benchmark -- --sizes 120,240,2400 --runs 3 --steps 60 --output tmp/performance/latest.json
+```
+
+The live document ref now receives every pan/move update, while React snapshots
+publish on release, a 120 ms input idle, another document command, or a culling
+boundary. Autosave keeps its 220 ms debounce after publication; pending older
+saves cannot report a newer live edit as saved. File operations finish an active
+gesture and read the latest geometry. This changes no project schema or media
+identity.
+
+`useViewport` paints the world and dotted grid on compositor layers. It publishes
+before the current viewport leaves the last rendered frustum's 100-screen-pixel
+margin, inside the existing 200-pixel culling overscan. Evidence becomes available
+during a held pan. `MoveView` paints only the moving assembly and affected visible
+connectors, then hands geometry back to React on publication. Final connector
+paths are restored explicitly when Undo returns React props to their old values.
+Only an owned global board move intercepts pointer events before React; native
+media, range, region and evidence-tile interactions keep their handlers.
+
+Docking builds static geometry and a spatial grid once per gesture/layout
+publication, then queries nearby anchors and potential collisions. Candidate
+ordering and the previous narrow-phase rules stay intact; large geometry uses
+bounded full-scan fallbacks. Source lookup in `boardBoxes` is indexed once per
+call. Resize continues through its existing layout/reflow path.
+
+Regression coverage compares indexed snapping with full scans across four zoom
+levels, collisions, assemblies and stable ties. A production React commit counter
+observes startup commits, then limits a 40-step held drag to eight root commits
+while checking actual card pixels, live connectors, Undo and persisted geometry.
+Additional workflows cover held-pan reveal, anchored wheel zoom/grid phase,
+same-batch zoom reset and a ZIP captured before pointer release. Focus/native drag
+must not scroll the workspace independently of the camera; the workspace uses
+`overflow: clip`, while scrollable evidence/coding interiors keep their scrolling.
 
 ## Application ownership refactor · 6–7 November 2026
 

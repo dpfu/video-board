@@ -191,6 +191,13 @@ test('retrieval raises covered evidence and reopening Codes reveals the existing
     panel = page.locator('.codes-card');
   await drawRegion(page, still);
   await waitSaved(page);
+  expect(
+    await page.locator('.board').evaluate((stage) => [stage.scrollLeft, stage.scrollTop]),
+    'Focusing evidence must not scroll the workspace independently of its camera',
+  ).toEqual([0, 0]);
+  await expect(page.getByRole('button', { name: 'Pan board', exact: true })).toBeInViewport({
+    ratio: 1,
+  });
   const before = await savedBoard(page),
     region = before.quotations.find((q) => q.kind === 'region')!;
   const player = page.locator('.video-card');

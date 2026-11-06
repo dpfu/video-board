@@ -11,18 +11,34 @@ export function useDocument(ready: boolean, notify: (message: string) => void) {
   const [board, setBoard] = useState<Board>(emptyBoard);
   const current = useRef(board);
   const history = useRef<Board[]>([]);
+  const previewTimer = useRef<ReturnType<typeof setTimeout>>();
   const [undoCount, setUndoCount] = useState(0);
   const [removed, setRemoved] = useState(false);
   const [saving, setSaving] = useState<SaveState>('saved');
+  function update(update: (board: Board) => Board) {
+    let next = update(current.current);
+    if (next === current.current) return false;
+    if (next.quotations !== current.current.quotations || next.codes !== current.current.codes)
+      next = reconcileSpaces(next);
+    current.current = next;
+    return true;
+  }
   const actions = useActions({
-    change(update: (board: Board) => Board) {
-      let next = update(current.current);
-      if (next === current.current) return;
-      if (next.quotations !== current.current.quotations || next.codes !== current.current.codes)
-        next = reconcileSpaces(next);
-      current.current = next;
+    change(updateBoard: (board: Board) => Board) {
+      if (update(updateBoard)) actions.publish();
+    },
+    preview(updateBoard: (board: Board) => Board) {
+      if (!update(updateBoard)) return;
+      autosave.cancelPending();
       setSaving('waiting');
-      setBoard(next);
+      clearTimeout(previewTimer.current);
+      previewTimer.current = setTimeout(() => actions.publish(), 120);
+    },
+    publish() {
+      clearTimeout(previewTimer.current);
+      if (current.current === board) return;
+      setSaving('waiting');
+      setBoard(current.current);
     },
     checkpoint() {
       history.current = [...history.current.slice(-29), current.current];
@@ -38,6 +54,8 @@ export function useDocument(ready: boolean, notify: (message: string) => void) {
       return true;
     },
     replace(next: Board) {
+      clearTimeout(previewTimer.current);
+      autosave.cancelPending();
       current.current = next;
       setBoard(next);
       history.current = [];
@@ -60,7 +78,10 @@ export function useDocument(ready: boolean, notify: (message: string) => void) {
     if (ready) autosave.schedule(board);
     return () => autosave.cancelPending();
   }, [board, ready, autosave]);
-  useLifetime(() => autosave.dispose());
+  useLifetime(() => {
+    clearTimeout(previewTimer.current);
+    autosave.dispose();
+  });
   return { board, current, undoCount, removed, saving, actions, autosave };
 }
 export type BoardDocument = ReturnType<typeof useDocument>;

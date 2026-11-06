@@ -54,7 +54,7 @@ unchanged.
 | Linked clip cards with muted hover preview and editable ranges | Implemented: shot default, independent scrub/playback, shared source data, duplicate views and explicit all-shots action. |
 | Free quotations, whole-video/clip/subsegment coding, region coding, memos and retrieval | Implemented: flat codes, compact assignment popovers, dockable Codes/Quotations/Sources module, ZIP restore and CSV export. |
 | Still-region selection | Implemented: manual, movable/resizable rectangles; retiming preserves geometry, identity, codes and memo across views. |
-| Board performance | Implemented: cached dock index/module rendering, viewport culling and bounded covers. Measured 31–32× faster pan/drag elapsed time on a 240-clip synthetic board; full protocol and smaller-board limits in development notes. |
+| Board performance | Implemented: viewport culling, bounded covers, live gesture painting and indexed snapping. On 7 November, dragging used 13.5–14.8× less JavaScript and 2.3–3.1× less main-thread task time against the refactored build; elapsed/frame timing did not improve materially. The earlier 4 November result and both protocols remain in development notes. |
 | Live code collections and provisional spatial groups | Implemented: linked mixed evidence, relative arrangement, memos, explicit promotion/reuse, virtualized previews and v4 ZIP/PNG support. |
 | Browser segmentation for proposing still regions | Deferred by Daniel for the first version; research retained below. |
 
@@ -239,6 +239,46 @@ URLs, then successfully recaptured coded frames and saved new work. Reviewed the
 resulting board screenshots. Measured 120/240-clip interactions retain similar
 frame timing with about 5–14% additional main-thread work; exact measurements and
 ownership details are preserved in [development notes](docs/DEVELOPMENT.md).
+
+## Interaction speed · 7 November 2026
+
+Daniel requested another 10× speed improvement against the completed application
+refactor (`b7cce92`). Target actual board interaction work, retaining shared media,
+quotation identities, live docking feedback and local persistence.
+
+**Implemented plan:**
+
+1. Measure the current production build with the existing real-pointer benchmark
+   at 120/240 clips and add a 2,400-clip stress case. Keep the same generated video,
+   viewport, pointer steps and warm-up/measured-run protocol for both builds.
+2. Remove full React/layout recomputation from pixel-by-pixel pan/group movement.
+   Keep live geometry current, paint only affected DOM, and publish at meaningful
+   boundaries. Newly exposed evidence must still appear during a held gesture.
+3. Reuse geometry and docking indexes while the board structure is unchanged.
+   Preserve resize, snap collision checks, group motion, code/region editing,
+   preview retention, Undo and cancelled-gesture semantics.
+4. Add regressions for continuous manipulation, culling/reveal, interrupted work
+   and persistence. Run the complete suite and compare the exact final production
+   bundle. Report measured gains and any limits to the 10× target honestly.
+5. Update the spec/development notes/changelog, push and verify Pages deployment.
+
+Live pan/group pixels now update the world/grid or only the moving modules and
+their visible connectors. The current document receives every update; React
+publishes on release, 120 ms idle, other document edits or before the viewport
+leaves rendered overscan. Autosave and exports use current geometry. Cached
+spatial queries preserve docking/collision order; resizing retains its existing
+reflow. Undo ends a held drag, and native focus/drag scrolling cannot move the
+workspace underneath its camera. Rapid zoom reset reads the live scale.
+
+Verification: formatting, TypeScript/build, **124 Vitest checks and 41 Chromium
+workflows** pass; reviewed the coding-board screenshot. The unchanged production
+benchmark compared 120/240/2,400 source-linked clips against `b7cce92`, with one
+warm-up and three measured runs of 60 real pointer steps per gesture. Dragging
+uses **13.5–14.8× less JavaScript** and **2.3–3.1× less main-thread task time**;
+panning uses 5.5–9.2× less JavaScript and 1.3–1.6× less task time. The frame-paced
+elapsed/P95 timings do not establish a 10× overall-app speedup; pan elapsed time
+was 3–14% higher. Exact bundle identities, measurements and limits are in
+[development notes](docs/DEVELOPMENT.md#interaction-speed--7-november-2026).
 
 ## Exploratory pass · 5 November 2026
 

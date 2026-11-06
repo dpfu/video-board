@@ -156,15 +156,16 @@ export function parseTimecode(value: string) {
 }
 
 export function boardBoxes(board: Board) {
+  const sources = new Map(board.videos.map((video) => [video.id, video]));
   return [
     ...board.videos.filter((v) => !v.hidden).map((v) => ({ ...v, height: videoHeight(v) })),
     ...board.stills.flatMap((s) => {
-      const video = board.videos.find((v) => v.id === s.videoId);
+      const video = sources.get(s.videoId);
       return video ? [{ ...s, height: stillHeight(s, video) }] : [];
     }),
     ...board.tracks.map((track) => ({ ...track })),
     ...board.clips.flatMap((clip) => {
-      const video = board.videos.find((v) => v.id === clip.videoId);
+      const video = sources.get(clip.videoId);
       return video ? [{ ...clip, height: clipHeight(clip, video) }] : [];
     }),
     ...board.panels.map((panel) => ({ ...panel })),

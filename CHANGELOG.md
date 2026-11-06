@@ -23,11 +23,13 @@ qualitative video analysis.
 - Groups, collection memos and arrangements in local storage, Undo and project
   ZIPs. PNG export fits each complete arrangement into its frame, including
   scrolled-out items. Additional views do not duplicate CSV quotation rows.
-- Expand coverage from 71 to **154 checks: 116 Vitest checks and 38 real-media
+- Expand coverage from 71 to **165 checks: 124 Vitest checks and 41 real-media
   Chromium workflows**. Include all manual/live transfer combinations, legacy
   ZIP migration, zoomed/scrolled drops, same-project restore, preview cleanup and
   decoded PNG content for scrolled-out evidence. Cover save ordering/recovery,
   asset/worker/playback disposal, inactive-clip scrubbing and shared time fields.
+  Add cached-snap parity, continuous movement with bounded React commits, live
+  culling/grid alignment, rapid zoom reset, Undo during a drag and backup flushing.
 
 ### Fixed
 
@@ -41,6 +43,9 @@ qualitative video analysis.
 - Ignore unrelated pointers during range edits. Escape, blur and lost pointer
   capture end gestures; unfinished rectangles are discarded while applied
   movement and range edits remain.
+- Keep connectors aligned after Undo during a drag. Prevent native focus/drag
+  scrolling from shifting the board underneath its camera; reset zoom using the
+  latest live camera even before a pending render.
 
 ### Changed
 
@@ -59,6 +64,15 @@ qualitative video analysis.
   fixed time. Monitor runtime/console errors and failed app HTTP responses on
   every test page, close extra project contexts automatically, and restrict
   database helpers to the disposable test origin.
+- Paint live pan/group movement on compositor layers, publish document snapshots
+  at release, idle or culling boundaries, and cache nearby docking/collision
+  searches for the active move. Keep connectors and magnetic feedback live while
+  preserving current geometry for Undo, autosave and project exports.
+- Measured against the preceding refactor on 120/240/2,400-clip boards: dragging
+  uses **13.5–14.8× less JavaScript** and **2.3–3.1× less main-thread task time**.
+  Frame-paced elapsed time stays similar; pan elapsed time is 3–14% higher.
+  This is an interaction CPU-work improvement, not a 10× whole-app speedup.
+  [Protocol, exact bundles and full results](docs/DEVELOPMENT.md#interaction-speed--7-november-2026).
 
 ### Compatibility
 

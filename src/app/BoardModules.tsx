@@ -1,3 +1,4 @@
+import { linkPath } from '../gestureView';
 import { ModuleFrame } from './ModuleFrame';
 import { memo, useMemo } from 'react';
 import { VideoPlayer } from '../VideoPlayer';
@@ -129,13 +130,12 @@ export const BoardModules = memo(function BoardModules({
           .map((still) => {
             const source = sourceById.get(still.videoId);
             if (!source || source.hidden) return null;
-            const x1 = source.x + source.width / 2,
-              x2 = still.x + still.width / 2;
             return (
               <path
                 key={still.id}
+                data-link-id={still.id}
                 className={selected === source.id || selected === still.id ? 'is-active' : ''}
-                d={`M ${x1} ${source.y + 14} C ${x1} ${source.y - 40}, ${x2} ${still.y - 40}, ${x2} ${still.y + 14}`}
+                d={linkPath(source, still)}
               />
             );
           })}

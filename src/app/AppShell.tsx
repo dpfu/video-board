@@ -219,10 +219,6 @@ export function AppShell({
         onLostPointerCapture={interaction.actions.lostCapture}
         className={`board ${hand || space ? 'board--hand' : ''} ${dragOver ? 'board--drop' : ''}`}
         aria-label="Video board workspace"
-        style={{
-          backgroundPosition: `${board.camera.x}px ${board.camera.y}px`,
-          backgroundSize: `${24 * board.camera.scale}px ${24 * board.camera.scale}px`,
-        }}
         onPointerDownCapture={pan}
         onDragOver={(event) => {
           event.preventDefault();
@@ -251,8 +247,10 @@ export function AppShell({
           }
         }}
       >
+        <div ref={viewport.grid} className="board-grid" aria-hidden="true" />
         <div
           className="board-world"
+          ref={viewport.world}
           style={{
             transform: `translate(${board.camera.x}px, ${board.camera.y}px) scale(${board.camera.scale})`,
           }}
@@ -326,8 +324,9 @@ export function AppShell({
           <IconButton icon={Minus} label="Zoom out" onClick={() => zoom(1 / 1.2)} />
           <button
             className="zoom-value"
+            ref={viewport.zoomValue}
             title="Reset zoom to 100%"
-            onClick={() => zoom(1 / board.camera.scale)}
+            onClick={() => zoom(1 / current.current.camera.scale)}
           >
             {Math.round(board.camera.scale * 100)}%
           </button>

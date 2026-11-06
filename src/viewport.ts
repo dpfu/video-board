@@ -18,3 +18,22 @@ export function visibleModuleIds(
       ids.add(box.id);
   return ids;
 }
+
+/** A live camera remains inside the last rendered overscan until another publish is needed. */
+export function cameraCovered(
+  rendered: Board['camera'],
+  next: Board['camera'],
+  viewport: { width: number; height: number },
+  margin = 100,
+) {
+  const oldLeft = (-margin - rendered.x) / rendered.scale,
+    oldTop = (-margin - rendered.y) / rendered.scale;
+  return (
+    -next.x / next.scale >= oldLeft &&
+    -next.y / next.scale >= oldTop &&
+    (viewport.width - next.x) / next.scale <=
+      (viewport.width + margin - rendered.x) / rendered.scale &&
+    (viewport.height - next.y) / next.scale <=
+      (viewport.height + margin - rendered.y) / rendered.scale
+  );
+}

@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useLayoutEffect,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -10,7 +11,7 @@ import {
   applySnap,
   detachModule,
   dockIndex,
-  findSnap,
+  createSnapSearch,
   groupIds,
   reflow,
   rootId,
@@ -18,6 +19,7 @@ import {
   type Snap,
 } from '../docking';
 import { useBoardMotion } from '../motion';
+import { MoveView, paintSnap } from '../gestureView';
 import type { BoardDocument } from './useDocument';
 import type { Viewport } from './useViewport';
 import type { Editing } from './useEditing';
@@ -42,6 +44,9 @@ type Gesture = PointerOrigin &
         originals: Map<string, ModuleCard>;
         moving: Set<string>;
         root: string;
+        delta: Point;
+        search: ReturnType<typeof createSnapSearch>;
+        view: MoveView;
       }
   );
 
@@ -72,21 +77,47 @@ export function useInteraction(
   const snapRef = useRef<Snap | null>(null);
   const [moving, setMoving] = useState(new Set<string>());
   const gesture = useRef<Gesture | null>(null);
+  const releasedView = useRef<MoveView | null>(null);
   const docks = useMemo(
     () => dockIndex(board),
     [board.videos, board.stills, board.tracks, board.clips, board.panels, board.spaces],
   );
   const motion = useBoardMotion(board, stage, project.loaded, () => !!gesture.current);
   function finishGesture(commit: boolean) {
-    if (commit && gesture.current?.kind === 'move' && snapRef.current)
-      change((b) => applySnap(b, snapRef.current!));
+    const g = gesture.current;
+    if (g?.kind === 'move') {
+      motion.remember(
+        [...g.originals.values()].map((card) => ({
+          id: card.id,
+          x: card.x + g.delta.x,
+          y: card.y + g.delta.y,
+        })),
+      );
+      releasedView.current = g.view;
+      if (commit && snapRef.current)
+        document.actions.preview((b) => applySnap(b, snapRef.current!));
+    }
     gesture.current = null;
+    document.actions.publish();
     snapRef.current = null;
     setSnap(null);
     setMoving(new Set());
     globalThis.document.body.classList.remove('is-dragging');
     previews.actions.blockHover(false);
   }
+  useLayoutEffect(() => {
+    const g = gesture.current;
+    if (g?.kind === 'move' && stage.current) {
+      g.view = new MoveView(stage.current, board, g.originals);
+      g.search = createSnapSearch(current.current, g.moving, g.root, g.originals);
+      g.view.paint(g.delta);
+      paintSnap(stage.current, snapRef.current);
+    }
+    if (!g) {
+      releasedView.current?.clear(board);
+      releasedView.current = null;
+    }
+  }, [board, snap, moving]);
 
   useEffect(() => {
     const move = (event: PointerEvent) => {
@@ -94,17 +125,27 @@ export function useInteraction(
       if (!g || g.pointer !== event.pointerId || project.current.current.kind !== 'ready') return;
       const dx = (event.clientX - g.x) / g.scale,
         dy = (event.clientY - g.y) / g.scale;
+      event.stopPropagation();
       if (g.kind === 'pan')
-        change((b) => ({ ...b, camera: { ...b.camera, x: g.origin.x + dx, y: g.origin.y + dy } }));
-      else if (g.kind === 'move')
-        change((b) => {
-          const next = translate(b, g.originals, { x: dx, y: dy });
-          const candidate = event.shiftKey ? null : findSnap(next, g.moving, g.root);
-          snapRef.current = candidate;
-          setSnap(candidate);
-          return next;
+        viewport.actions.previewCamera({
+          ...current.current.camera,
+          x: g.origin.x + dx,
+          y: g.origin.y + dy,
         });
-      else
+      else if (g.kind === 'move') {
+        g.delta = { x: dx, y: dy };
+        document.actions.preview((b) => translate(b, g.originals, g.delta));
+        g.view.paint(g.delta);
+        const candidate = event.shiftKey ? null : g.search(g.delta, current.current.camera.scale);
+        const previous = snapRef.current;
+        snapRef.current = candidate;
+        if (
+          previous?.dock.to !== candidate?.dock.to ||
+          previous?.dock.side !== candidate?.dock.side
+        )
+          setSnap(candidate);
+        else paintSnap(stage.current, candidate);
+      } else
         change((b) =>
           reflow(
             mapCards(b, (card) => {
@@ -182,14 +223,14 @@ export function useInteraction(
       setSpace(false);
       actions.finishGesture(false);
     };
-    window.addEventListener('pointermove', move);
+    window.addEventListener('pointermove', move, true);
     window.addEventListener('pointerup', pointerUp);
     window.addEventListener('pointercancel', pointerCancel);
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     window.addEventListener('blur', blur);
     return () => {
-      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointermove', move, true);
       window.removeEventListener('pointerup', pointerUp);
       window.removeEventListener('pointercancel', pointerCancel);
       window.removeEventListener('keydown', down);
@@ -199,26 +240,31 @@ export function useInteraction(
   }, []);
 
   useEffect(() => {
-    const viewport = stage.current;
-    if (!viewport) return;
+    const element = stage.current;
+    if (!element) return;
     const wheel = (event: WheelEvent) => {
       if (project.current.current.kind !== 'ready') return;
       if ((event.target as Element).closest('select, input')) return;
       event.preventDefault();
       if (event.ctrlKey || event.metaKey) {
-        const box = viewport.getBoundingClientRect();
-        zoom(Math.exp(-event.deltaY * 0.008), {
-          x: event.clientX - box.left,
-          y: event.clientY - box.top,
-        });
+        const box = element.getBoundingClientRect();
+        zoom(
+          Math.exp(-event.deltaY * 0.008),
+          {
+            x: event.clientX - box.left,
+            y: event.clientY - box.top,
+          },
+          true,
+        );
       } else
-        change((b) => ({
-          ...b,
-          camera: { ...b.camera, x: b.camera.x - event.deltaX, y: b.camera.y - event.deltaY },
-        }));
+        viewport.actions.previewCamera({
+          ...current.current.camera,
+          x: current.current.camera.x - event.deltaX,
+          y: current.current.camera.y - event.deltaY,
+        });
     };
-    viewport.addEventListener('wheel', wheel, { passive: false });
-    return () => viewport.removeEventListener('wheel', wheel);
+    element.addEventListener('wheel', wheel, { passive: false });
+    return () => element.removeEventListener('wheel', wheel);
   }, []);
 
   function begin(
@@ -265,10 +311,20 @@ export function useInteraction(
       origin: { x: card.x, y: card.y, width: card.width, height: card.height },
       scale: base.camera.scale,
     };
+    const root = rootId(base, id);
     gesture.current =
-      kind === 'move'
-        ? { ...origin, kind, originals, moving: ids, root: rootId(base, id) }
-        : { ...origin, kind };
+      kind === 'move' && stage.current
+        ? {
+            ...origin,
+            kind,
+            originals,
+            moving: ids,
+            root,
+            delta: { x: 0, y: 0 },
+            search: createSnapSearch(base, ids, root, originals),
+            view: new MoveView(stage.current, board, originals),
+          }
+        : { ...origin, kind: 'resize' };
     event.currentTarget.setPointerCapture(event.pointerId);
     globalThis.document.body.classList.add('is-dragging');
     if (kind === 'move') selectModule(id);
@@ -320,7 +376,9 @@ export function useInteraction(
   }
 
   function undo() {
-    if (project.current.current.kind !== 'ready' || !document.actions.undo()) return;
+    if (project.current.current.kind !== 'ready') return;
+    if (gesture.current) finishGesture(false);
+    if (!document.actions.undo()) return;
     editing.actions.undo();
     previews.actions.stop();
   }
@@ -342,7 +400,9 @@ export function useInteraction(
   }, [project.locked, stage]);
   useEffect(
     () => () => {
-      gesture.current = null;
+      actions.finishGesture(false);
+      releasedView.current?.clear(current.current);
+      releasedView.current = null;
       documentBodyCleanup();
     },
     [],

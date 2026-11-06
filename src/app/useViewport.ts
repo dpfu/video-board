@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { boardBoxes, clamp, mapCards, topZ, type Camera, type Point } from '../model';
 import type { BoardDocument } from './useDocument';
 import { useActions } from '../useActions';
+import { cameraCovered } from '../viewport';
 
 export function useViewport(document: BoardDocument) {
   const {
@@ -9,6 +10,11 @@ export function useViewport(document: BoardDocument) {
     actions: { change },
   } = document;
   const stage = useRef<HTMLDivElement>(null);
+  const world = useRef<HTMLDivElement>(null);
+  const grid = useRef<HTMLDivElement>(null);
+  const painted = useRef<Camera | null>(null);
+  const zoomValue = useRef<HTMLButtonElement>(null);
+  const renderedCamera = useRef(document.board.camera);
   const [size, setSize] = useState({ width: window.innerWidth, height: window.innerHeight });
   useEffect(() => {
     if (!stage.current) return;
@@ -18,23 +24,56 @@ export function useViewport(document: BoardDocument) {
     observer.observe(stage.current);
     return () => observer.disconnect();
   }, []);
-  function zoom(factor: number, anchor?: Point) {
+  function paintCamera(camera: Camera, force = false) {
+    const before = painted.current;
+    const scaleChanged = force || before?.scale !== camera.scale;
+    if (force || before?.x !== camera.x || before?.y !== camera.y || scaleChanged) {
+      if (world.current)
+        world.current.style.transform = `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`;
+      if (grid.current) {
+        const cell = 24 * camera.scale;
+        grid.current.style.transform = `translate(${(camera.x + 80) % cell}px, ${(camera.y + 80) % cell}px)`;
+      }
+    }
+    if (scaleChanged) {
+      if (grid.current)
+        grid.current.style.backgroundSize = `${24 * camera.scale}px ${24 * camera.scale}px`;
+      if (zoomValue.current) {
+        const label = `${Math.round(camera.scale * 100)}%`;
+        if (zoomValue.current.textContent !== label) zoomValue.current.textContent = label;
+      }
+    }
+    painted.current = camera;
+  }
+  function previewCamera(camera: Camera) {
+    const before = current.current.camera;
+    if (before.x === camera.x && before.y === camera.y && before.scale === camera.scale) return;
+    document.actions.preview((board) => ({ ...board, camera }));
+    paintCamera(camera);
+    if (!cameraCovered(renderedCamera.current, camera, size)) {
+      renderedCamera.current = camera;
+      document.actions.publish();
+    }
+  }
+  useLayoutEffect(() => {
+    renderedCamera.current = document.board.camera;
+    paintCamera(current.current.camera, true);
+  });
+  function zoom(factor: number, anchor?: Point, preview = false) {
     const box = stage.current?.getBoundingClientRect();
     if (!box) return;
     const at = anchor || { x: box.width / 2, y: box.height / 2 };
-    change((b) => {
-      const c = b.camera,
-        scale = clamp(c.scale * factor, 0.15, 3);
-      return {
-        ...b,
-        camera: {
-          scale,
-          x: at.x - ((at.x - c.x) / c.scale) * scale,
-          y: at.y - ((at.y - c.y) / c.scale) * scale,
-        },
-      };
-    });
+    const c = current.current.camera,
+      scale = clamp(c.scale * factor, 0.15, 3);
+    const camera = {
+      scale,
+      x: at.x - ((at.x - c.x) / c.scale) * scale,
+      y: at.y - ((at.y - c.y) / c.scale) * scale,
+    };
+    if (preview) previewCamera(camera);
+    else change((board) => ({ ...board, camera }));
   }
+
   function fit() {
     const boxes = boardBoxes(current.current),
       viewport = stage.current?.getBoundingClientRect();
@@ -92,7 +131,7 @@ export function useViewport(document: BoardDocument) {
       ),
     );
   }
-  const actions = useActions({ zoom, fit, exposeModule });
-  return { stage, size, actions };
+  const actions = useActions({ zoom, fit, exposeModule, previewCamera });
+  return { stage, world, grid, zoomValue, size, actions };
 }
 export type Viewport = ReturnType<typeof useViewport>;

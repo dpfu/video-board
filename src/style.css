@@ -209,13 +209,22 @@ button:disabled {
 .board {
   position: relative;
   flex: 1;
-  overflow: hidden;
+  /* The camera owns navigation; native focus/drag scrolling must not offset it. */
+  overflow: clip;
   touch-action: none;
   isolation: isolate;
   background-color: var(--canvas);
+}
+.board-grid {
+  position: absolute;
+  inset: -80px;
+  z-index: -1;
+  pointer-events: none;
   background-image: radial-gradient(circle, #46494f 0.7px, transparent 0.9px);
+  will-change: transform;
 }
 .board-world {
+  will-change: transform;
   position: absolute;
   top: 0;
   left: 0;
@@ -254,6 +263,7 @@ body.is-dragging * {
   border-color: #939eae;
 }
 .board-card.is-moving {
+  will-change: transform;
   box-shadow:
     0 10px 24px #0008,
     0 1px 2px #0009;

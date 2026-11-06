@@ -38,7 +38,7 @@ npm run test:e2e:install # Install Chromium once
 npm run check           # Formatting, unit/storage tests, build, browser tests
 ```
 
-The suite has **116 Vitest checks and 38 Playwright workflows**, using generated
+The suite has **124 Vitest checks and 41 Playwright workflows**, using generated
 media and disposable browser storage. GitHub Actions runs it on pushes and pull
 requests; passing builds of `main` deploy to Pages. `npm run benchmark` measures
 board interactions separately.

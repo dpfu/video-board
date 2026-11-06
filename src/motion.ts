@@ -122,5 +122,8 @@ export function useBoardMotion(
     }
     return offsets;
   }
-  return { highlight, interrupt };
+  function remember(points: Iterable<{ id: string; x: number; y: number }>) {
+    for (const point of points) previous.current.set(point.id, { x: point.x, y: point.y });
+  }
+  return { highlight, interrupt, remember };
 }

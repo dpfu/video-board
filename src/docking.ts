@@ -1,3 +1,4 @@
+import { BoxIndex, overlaps } from './spatial';
 import {
   allCards,
   boardBoxes,
@@ -105,15 +106,36 @@ export function findSnap(board: Board, moving: Set<string>, root: string): Snap 
   const boxes = boardBoxes(board),
     card = boxes.find((c) => c.id === root);
   if (!card) return null;
-  const threshold = 16 / board.camera.scale;
+  return scoreSnap(
+    card,
+    boxes.filter((c) => !moving.has(c.id)),
+    board.camera.scale,
+    (dx, dy) =>
+      boxes.some(
+        (a) =>
+          moving.has(a.id) &&
+          boxes.some(
+            (b) => !moving.has(b.id) && overlaps({ ...a, x: a.x + dx, y: a.y + dy }, b, 1),
+          ),
+      ),
+  );
+}
+
+type Box = ReturnType<typeof boardBoxes>[number];
+function scoreSnap(
+  card: Box,
+  targets: readonly Box[],
+  scale: number,
+  collides: (dx: number, dy: number) => boolean,
+): Snap | null {
+  const threshold = 16 / scale;
   let best: (Snap & { score: number }) | null = null;
   const aligned = (offset: number, parentSize: number, ownSize: number) => {
     const anchors = [0, (parentSize - ownSize) / 2, parentSize - ownSize];
     const nearest = anchors.sort((a, b) => Math.abs(a - offset) - Math.abs(b - offset))[0];
     return Math.abs(nearest - offset) < threshold ? nearest : offset;
   };
-  for (const target of boxes) {
-    if (moving.has(target.id)) continue;
+  for (const target of targets) {
     for (const side of ['bottom', 'top', 'right', 'left'] as const) {
       const vertical = side === 'bottom' || side === 'top';
       const overlap = vertical
@@ -139,23 +161,11 @@ export function findSnap(board: Board, moving: Set<string>, root: string): Snap 
       if (distance > threshold) continue;
       const dx = x - card.x,
         dy = y - card.y;
-      const collision = boxes.some(
-        (a) =>
-          moving.has(a.id) &&
-          boxes.some(
-            (b) =>
-              !moving.has(b.id) &&
-              a.x + dx < b.x + b.width - 1 &&
-              a.x + dx + a.width > b.x + 1 &&
-              a.y + dy < b.y + b.height - 1 &&
-              a.y + dy + a.height > b.y + 1,
-          ),
-      );
-      if (collision) continue;
+      if (collides(dx, dy)) continue;
       const score = distance + Math.abs(vertical ? dx : dy) * 0.05;
       if (!best || score < best.score)
         best = {
-          id: root,
+          id: card.id,
           dock: { to: target.id, side, offset },
           x,
           y,
@@ -166,6 +176,41 @@ export function findSnap(board: Board, moving: Set<string>, root: string): Snap 
     }
   }
   return best;
+}
+
+/** Cache static geometry once per move; query only nearby anchors/collisions. */
+export function createSnapSearch(
+  board: Board,
+  moving: Set<string>,
+  root: string,
+  originals?: Map<string, ModuleCard>,
+) {
+  const boxes = boardBoxes(board);
+  const own = boxes
+    .filter((box) => moving.has(box.id))
+    .map((box) => {
+      const origin = originals?.get(box.id);
+      return origin ? { ...box, x: origin.x, y: origin.y } : box;
+    });
+  const origin = own.find((box) => box.id === root);
+  const index = new BoxIndex(boxes.filter((box) => !moving.has(box.id)));
+  return (delta: Point, scale: number): Snap | null => {
+    if (!origin) return null;
+    const card = { ...origin, x: origin.x + delta.x, y: origin.y + delta.y };
+    const reach = 16 / scale + DOCK_GAP + 1;
+    const targets = index.query({
+      x: card.x - reach,
+      y: card.y - reach,
+      width: card.width + reach * 2,
+      height: card.height + reach * 2,
+    });
+    return scoreSnap(card, targets, scale, (dx, dy) =>
+      own.some((box) => {
+        const placed = { ...box, x: box.x + delta.x + dx, y: box.y + delta.y + dy };
+        return index.query(placed).some((target) => overlaps(placed, target, 1));
+      }),
+    );
+  };
 }
 
 export function applySnap(board: Board, snap: Snap) {

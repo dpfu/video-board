@@ -1,6 +1,6 @@
 # Video Board — working specification
 
-Updated **6 November 2026**, preserving Daniel's 4 November decisions and the
+Updated **7 November 2026**, preserving Daniel's 4 November decisions and the
 5 November exploratory and comparative passes. This is the single
 home for product decisions, proposed behavior and open questions. Update it as
 the discussion develops; preserve corrections and their rationale. The
@@ -57,6 +57,54 @@ unchanged.
 | Board performance | Implemented: viewport culling, bounded covers, live gesture painting and indexed snapping. On 7 November, dragging used 13.5–14.8× less JavaScript and 2.3–3.1× less main-thread task time against the refactored build; elapsed/frame timing did not improve materially. The earlier 4 November result and both protocols remain in development notes. |
 | Live code collections and provisional spatial groups | Implemented: linked mixed evidence, relative arrangement, memos, explicit promotion/reuse, virtualized previews and v4 ZIP/PNG support. |
 | Browser segmentation for proposing still regions | Deferred by Daniel for the first version; research retained below. |
+| Optional multimodal analysis companion | Proposed on 7 November: browser-side integration with a user-supplied API key. Gemini is a candidate; no provider integration or automatic coding is implemented. |
+
+## Optional multimodal companion · 7 November 2026
+
+Daniel proposed Gemini or another video-capable model as an analysis companion,
+keeping the application in the client with a user-supplied API key. This is an
+exploration, not an instruction to implement the following feature ideas.
+The existing analysis workflow remains usable without an AI account or uploads.
+
+**Direction from the discussion:** browser-to-provider requests without an app
+backend. This is client-side integration with remote inference; submitted media
+leaves the device. A user-entered key belongs in memory for the session, outside
+project data, backups, source code and logs. Never ship a shared application key.
+Google's [SDK supports browser API-key use](https://github.com/googleapis/js-genai#browser),
+while its production guidance recommends keeping secrets server-side. Bring-your-own-key
+mode must make that browser credential exposure clear; it does not turn a browser
+into a secure key vault.
+
+**Candidate uses, not yet selected:**
+
+- Ask about a clip, still or rectangular region, retaining surrounding context.
+  Separate visible/audible description from interpretation and uncertainty.
+- Compare evidence in a group/collection, propose differences or alternative
+  readings, and draft a memo with source/time references.
+- Challenge a provisional code: identify a weak fit or counterexample among the
+  submitted evidence and suggest clearer inclusion/exclusion boundaries.
+- Find candidate moments matching a research question within explicitly submitted
+  video, then review them as source-linked clip proposals.
+- Draft timestamped speech/action notes or possible cluster names. Keep these
+  distinct from analyst-accepted descriptions, codes and quotations.
+
+**Recommended small experiment, awaiting selection:** a compact dockable companion
+attached to the current evidence/group, with Ask and Compare actions. Show the
+submitted scope before sending; return clickable evidence references and explicit
+Save as memo / Create quotation actions. Suggestions do not silently modify codes,
+regions or existing quotations. Keep source/range, prompt and model provenance
+with accepted AI-assisted output, and retain normal Undo for accepted board edits.
+
+Gemini supports [video/audio understanding and timestamped questions](https://ai.google.dev/gemini-api/docs/video-understanding).
+Returned times and interpretations need review; sampled model input is not a
+frame-exact observation record. Our clip views contain references, not independent
+video files: sending only an excerpt requires extracting a temporary snippet or
+selected frames. Processing offsets on an uploaded original are not a restriction
+on which bytes were uploaded. No automatic whole-library upload, background model
+analysis, new media copies in the board, model dependency or schema change is
+introduced by this proposal. Full-video semantic indexing and continuous live
+commentary remain later ideas. A small provider boundary can preserve future
+choice without building a multi-provider framework first.
 
 ## Live collections and spatial coding · 6 November 2026
 

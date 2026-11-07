@@ -57,7 +57,7 @@ unchanged.
 | Board performance | Implemented: viewport culling, bounded covers, live gesture painting and indexed snapping. On 7 November, dragging used 13.5–14.8× less JavaScript and 2.3–3.1× less main-thread task time against the refactored build; elapsed/frame timing did not improve materially. The earlier 4 November result and both protocols remain in development notes. |
 | Live code collections and provisional spatial groups | Implemented: linked mixed evidence, relative arrangement, memos, explicit promotion/reuse, virtualized previews and v4 ZIP/PNG support. |
 | Browser segmentation for proposing still regions | Deferred by Daniel for the first version; research retained below. |
-| Optional multimodal analysis companion | Proposed on 7 November: browser-side integration with a user-supplied API key. Gemini is a candidate; no provider integration or automatic coding is implemented. |
+| Optional multimodal analysis companion | Proposed on 7 November: browser-side API integration with a user-supplied key, or local inference. Gemini and browser models are candidates; no integration or automatic coding is implemented. |
 
 ## Optional multimodal companion · 7 November 2026
 
@@ -105,6 +105,40 @@ analysis, new media copies in the board, model dependency or schema change is
 introduced by this proposal. Full-video semantic indexing and continuous live
 commentary remain later ideas. A small provider boundary can preserve future
 choice without building a multi-provider framework first.
+
+### Local inference option · 7 November 2026
+
+Daniel also asked about running local models with web technology. This adds a
+deployment option to evaluate, without selecting a model or implementation yet:
+
+- **Inside the browser:** [Transformers.js](https://huggingface.co/docs/transformers.js/)
+  uses ONNX Runtime Web, with [WebGPU](https://huggingface.co/docs/transformers.js/guides/webgpu)
+  for GPU computation and WebAssembly for supported CPU execution. No API key or
+  inference server is required; model/runtime downloads can be cached for reuse.
+  [WebLLM](https://webllm.mlc.ai/docs/) is another browser runtime, useful for the
+  text/memo side; model-specific modality support still needs checking.
+- **Concrete visual candidate:** Liquid AI publishes an
+  [LFM2-VL-450M browser captioning demo](https://huggingface.co/spaces/LiquidAI/LFM2-VL-WebGPU).
+  This demonstrates local visual inference, not that our app already supports a
+  complete audiovisual/temporal companion. Start by evaluating stills/regions,
+  then timestamped frames from short clips. Image captioning alone does not
+  establish understanding of motion, order or sound. Local Whisper transcription
+  and embeddings are additional documented Transformers.js building blocks.
+- **Local helper alternative:** [Ollama's local vision API](https://docs.ollama.com/capabilities/vision)
+  can receive images from the browser. This requires a separately installed
+  service and allowed browser-origin configuration; it is not browser-only.
+  Use explicitly local models if keeping research media on the device.
+
+Recommended evaluation remains small: Describe this still/region, then Compare
+selected evidence. Measure first download/load, warm latency, memory, description
+quality and video/board responsiveness on generated and approved examples before
+choosing a model. Load on demand, keep one worker/model and bounded input frames,
+support cancellation/obsolete-result rejection, and keep model assets outside
+project ZIPs. A worker separates JavaScript work from the UI but does not remove
+GPU contention with video playback and board rendering. Offline inference needs
+the selected model and runtime assets available locally. No model weights have
+been downloaded, and no local-model dependency or automatic processing is added
+by this discussion.
 
 ## Live collections and spatial coding · 6 November 2026
 

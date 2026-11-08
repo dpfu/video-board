@@ -60,6 +60,191 @@ unchanged.
 | Optional multimodal analysis companion | Deferred on 8 November: establish the browser workflow without LLMs first. Earlier model/API research remains below. |
 | Desktop host and native media/model processing | Deferred on 8 November: explore the browser's limits first, then revisit Electron/native processing. Earlier evaluation remains below. |
 | Browser FFmpeg/Wasm | Implemented experiment: explicit MP4 download of a source-linked clip, using an on-demand worker; up to 60 seconds / 720p from originals up to 256 MB. No automatic conversion or playback-engine replacement. |
+| Annotation tiers and ELAN exchange | Draft for discussion on 8 November: freely added tiers with free text or predefined vocabularies, linked to source time and the visual board. EAF/ETF interoperability is an explicit requirement; no annotation module or ELAN importer/exporter is implemented. |
+
+## Annotation tiers and ELAN exchange · 8 November 2026
+
+**Status: design discussion, not implementation.** Working module name:
+**Annotations**. Daniel wants freely added annotation tracks, some developed from
+scratch and some using an existing tag set. Learn from ELAN and support research
+workflows using its schemes, especially Grzenkowicz and Wildfeuer (2025), while
+retaining the board's visual/multimodal approach. These are the requested
+directions; the interface and scope recommendations below remain proposals.
+
+### Existing foundation and missing pieces
+
+The implemented model already separates original media, free quotations and board
+views. Range quotations have source-relative start/end times; clips, stills,
+regions, qualitative codes, memos and collections can share evidence. Frames,
+Audio and Cuts modules use the source's shared playback clock. Docking/resizing,
+Undo, local persistence and project ZIPs provide the existing interface/storage
+foundation.
+
+The missing layer is an annotation document with named tiers, annotation values,
+reusable tier types/vocabularies, and explicit constraints/dependencies. The
+current `TrackKind` only covers derived media views; `Quotation.title`, flat
+`Code` records and contextual `Quotation.parentId` are insufficient to encode
+ELAN semantics. Trimming/deleting a parent clip currently preserves its temporal
+children's own source boundaries. Keep that agreement separate from dependent-tier
+rules. No schema/version change has been made for this proposal.
+
+### What to learn from ELAN
+
+The [ELAN annotation model](https://www.mpi.nl/corpus/html/elan/ch02.html) separates
+tiers, reusable tier types and individual annotations. Its dependent types cover
+gap-free timed subdivision, timed inclusion with gaps, ordered symbolic
+subdivision and one-to-one symbolic association. An independent tier has no
+parent. Same-tier annotations cannot overlap; different tiers can describe
+simultaneous observations. Symbolic children reference their parents rather than
+having independently editable timestamps.
+
+[Controlled vocabularies](https://www.mpi.nl/corpus/html/elan/ch02s06.html) define
+allowed values and descriptions. [ETF templates](https://www.mpi.nl/corpus/html/elan/ch01s02s13.html)
+reuse tiers, types and vocabularies across recordings. Apply these concepts to our
+workflow with compact direct editing; the ELAN menu structure need not determine
+the board interface.
+
+Recommended starting semantics:
+
+- A **tier** represents one analytic dimension, such as Structure, Speech, Gesture
+  or Camera angle. Several tiers may describe the same moment with different
+  boundaries. Do not force every modality or interpretation to follow shot cuts.
+- An **annotation** gives a value to a temporal unit in a tier. Its value is free
+  text or a selected vocabulary entry. Keep an optional memo for elaboration.
+- A **vocabulary** is scoped and reusable. Values retain their own identity,
+  spelling and descriptions; a value named “left” in two vocabularies need not
+  mean the same thing. Creating a vocabulary from recurring free-text values is
+  an explicit schema edit, preserving existing evidence.
+- Existing qualitative **Codes** remain available across annotations, clips,
+  stills and regions. Recommended: keep annotation values/vocabularies separate
+  from Codes, with explicit coding or links between them. Transcription text and
+  a scheme's categorical observations can then coexist with interpretive coding.
+  Whether Daniel wants a single shared Code list instead is still open.
+- Start new temporal tiers with the independent, non-overlapping ELAN rule;
+  allow gaps. Existing free quotations remain freely overlapping. Drawing or
+  moving into an occupied interval must show the conflict rather than silently
+  overwrite, split or move other annotations. Further tier rules need explicit
+  support before being offered for editing.
+- A gap means no annotation was entered there. It does not automatically assert
+  absence of a gesture, sound or feature. Preserve explicitly empty annotation
+  values too; a scheme may use an explicit value for absence.
+
+### Proposed board interaction
+
+**Recommended, pending Daniel's preference:** one dockable Annotations module
+containing several aligned rows with a shared time ruler and playhead, matching
+the supplied sketch. Add/rename/reorder/hide rows, beginning with a blank tier or
+a reusable scheme. Freely place, resize, dock and duplicate views of the module;
+duplicating a view must share its annotation data. A separate module per tier
+remains an alternative under discussion.
+
+Keep a compact label column and directly editable interval blocks. Create an
+interval by drawing on an active row or using the player's selected range. Edit
+its label inline, or choose a vocabulary value with keyboard/pointer controls.
+Drag boundaries with a visible timecode; provide exact time fields and frame
+stepping. Distinguish header dragging on the board from moving a block in time.
+Click an annotation to seek and offer selection playback/looping; provide adjacent
+annotation navigation. Make edits undoable and keep invalid drafts local.
+
+Precise annotation needs **time zoom/pan**, separate from board camera zoom. A
+shared visible time window should keep the module's rows aligned; linking that
+window to Frames/Audio is proposed. Align timeline content after accounting for
+the label gutter, not just outer module edges. Existing scrubbers currently show
+the full duration; shared playback time alone does not provide time zoom.
+
+Bring a temporal annotation onto the board as a linked clip view; capture stills
+and mark regions as supporting evidence, arrange comparisons, write memos and
+retrieve by code. For simple timed units, reuse the quotation as the evidence
+anchor rather than persist two separately editable copies of its boundaries.
+Two independently created annotations are not automatically the same quotation
+merely because their times match. Symbolic/dependent annotations require explicit
+references and derived display extents, not invented independent time ranges.
+
+Links to still/region evidence should preserve their own identity. Retiming a
+still continues to move its frame beneath its fixed image-relative rectangle;
+it must not silently retime a linked temporal annotation. Removing a board view
+preserves the annotation, and moving/resizing a module changes only presentation.
+Seeding a shot tier from detected Cuts could be an explicit undoable action;
+detected cuts remain proposals, not semantic annotations or mandatory boundaries.
+Project ZIPs should retain the complete annotation data and view state; a board
+PNG should show the chosen timeline window and visible rows. Hiding a row or
+closing a module must not remove its underlying research data.
+
+### Compatibility is a research requirement
+
+Target a documented **EAF 3.0 exchange profile** and **ETF template reuse** as part
+of the module's design. The [official EAF specification](https://www.mpi.nl/tools/elan/EAF_Annotation_Format_3.0_and_ELAN.pdf)
+and [XSD](https://www.mpi.nl/tools/elan/EAFv3.0.xsd) describe time slots, alignable
+versus referring annotations, tier/type references, vocabulary entries and media
+descriptors. XML validity alone does not enforce all ELAN constraints.
+
+The planned interchange contract should cover:
+
+1. Import tiers, values and exact millisecond times from supported EAF documents;
+   retain stable source IDs, annotation/time-slot/reference IDs, tier types,
+   parent relations and symbolic order. Do not flatten dependent tiers into
+   unrelated ranges or fabricate timings for unresolved time slots. Document any
+   millisecond rounding needed when exporting native frame times; preserve the
+   native evidence's original precision.
+2. Import/reuse ETF schemes with their vocabularies and definitions. Preserve
+   entry IDs, languages, external references and participant/annotator metadata
+   where present, even where the first UI does not expose editing for every field.
+   An external vocabulary needs a deliberate local resolution path; do not
+   silently replace it with a new list.
+3. Relink media through user-selected local files. EAF media paths do not grant a
+   browser access to a researcher's filesystem. Preserve media offsets and the
+   distinction between an annotation-document timeline and media time. Several
+   synchronized recordings in one EAF need explicit support; unrelated board
+   videos should export as separate documents rather than share an invented clock.
+4. Export supported edited documents back to EAF with their semantics preserved.
+   Keep original imported files and give an explicit compatibility report for
+   unsupported structures. Initially retain affected structures read-only or
+   reject their editing/import as appropriate; never claim a faithful roundtrip
+   after dropping them. A filtered temporal export must be named as such.
+5. Keep board layout, image-region geometry and richer evidence links in the
+   native project ZIP. Define the EAF export's temporal scope and any extension
+   loss explicitly; an EAF export does not replace full board backup. CSV remains
+   useful for tabular analysis, not preservation of the complete tier model.
+
+Avoid designing a full ELAN clone upfront. A first editor can support independent
+tiers, free text and local vocabularies, with corresponding EAF/ETF exchange.
+That is a **limited compatibility milestone**, not proof that every published
+ELAN scheme works. Inspect the intended research template early and implement
+the dependent types it actually uses before claiming support for that scheme.
+
+### Grzenkowicz and Wildfeuer (2025): reference case and evidence limits
+
+[The article](https://doi.org/10.1093/llc/fqaf047), sections 3 and 4.3, combines
+formal and functional annotation, open descriptions, controlled values and
+hierarchical tiers; shot/composition is one reported dependency. It points to
+Supplementary Appendix 1 for a graphical scheme overview. At publication its
+notes described the manual as available on request and the annotated corpus as
+not yet in a repository. On 8 November, the article/ELAN model could be inspected
+through primary indexed material, but the linked supplement downloads and an
+actual ETF/EAF template were **not retrieved or verified**. Do not infer the exact
+tier stereotypes, complete vocabulary or an import success from the paper alone.
+
+The supplied signing-related screenshots illustrate tiered annotation and small
+predefined entry sets. Treat them as interface/method examples, separately from
+the 2025 study's specific scheme. The board sketch illustrates a Structure row
+and an add-row action; its drawn blocks do not define an accepted data model.
+
+Before certifying compatibility: inspect the actual scheme/template and one
+representative annotated EAF, record its types and dependencies, import/re-export
+it, compare IDs/values/times/relations, and open the result in ELAN itself. Use
+permission-appropriate examples and reproducible nonprivate fixtures for public
+tests. Include independent and dependent tiers, vocabularies, empty values,
+Unicode, time offsets, unsupported structures and unchanged media bytes. Reuse
+existing persistence/Undo/ZIP checks when implementation starts.
+
+### Next design decisions
+
+Discuss the module's shared-row versus separate-track layout and the relationship
+between annotation vocabularies and qualitative Codes with Daniel. Then agree a
+small manual workflow and the initial exchange profile using a real template.
+Only after that, implement one complete annotation/edit/reopen/exchange slice.
+LLMs, Electron, automatic semantic labeling, complex statistics and a full
+multi-coder workflow remain outside this first module draft.
 
 ## Browser workflow first · 8 November 2026
 

@@ -1,6 +1,6 @@
 # Video Board — working specification
 
-Updated **7 November 2026**, preserving Daniel's 4 November decisions and the
+Updated **8 November 2026**, preserving Daniel's 4 November decisions and the
 5 November exploratory and comparative passes. This is the single
 home for product decisions, proposed behavior and open questions. Update it as
 the discussion develops; preserve corrections and their rationale. The
@@ -58,6 +58,70 @@ unchanged.
 | Live code collections and provisional spatial groups | Implemented: linked mixed evidence, relative arrangement, memos, explicit promotion/reuse, virtualized previews and v4 ZIP/PNG support. |
 | Browser segmentation for proposing still regions | Deferred by Daniel for the first version; research retained below. |
 | Optional multimodal analysis companion | Proposed on 7 November: browser-side API integration with a user-supplied key, or local inference. Gemini and browser models are candidates; no integration or automatic coding is implemented. |
+| Desktop host and native media/model processing | Explored on 8 November: Electron with native FFmpeg and an LFM3-Omni runtime. Recommended small desktop experiment; no migration, native dependency or model download is implemented. |
+
+## Desktop host and LFM3-Omni · 8 November 2026
+
+Daniel suggested [LiquidAI/LFM3-Omni-2B](https://huggingface.co/LiquidAI/LFM3-Omni-2B)
+and asked whether Electron would be a better host, including native FFmpeg and
+fewer browser compatibility constraints. This records the evaluation and proposed
+next experiment; a wholesale desktop migration has not been selected.
+
+**Compatibility correction:** the relevant compute API is WebGPU, and
+[Safari 26 ships it](https://webkit.org/blog/17333/webkit-features-in-safari-26-0/).
+The earlier broad Safari caveat must not be read as absence of WebGL or WebGPU.
+Actual runtime/model compatibility still needs testing. Electron's advantage is
+a controlled Chromium version plus native filesystem/process access; its wrapper
+alone is not an inference or video-decoding speedup.
+
+**Model candidate:** the publisher documents video with synchronized soundtrack,
+text/images/audio input, text/speech output and a 32K context. It samples video at
+2 fps by default. This is a candidate for audiovisual clip questions and reviewable
+observation/memo drafts, not a frame-exact annotation engine. The publisher offers
+[GGUF weights](https://huggingface.co/LiquidAI/LFM3-Omni-2B-GGUF) and a documented
+[llama.cpp deployment route](https://docs.liquid.ai/deployment/on-device/llama-cpp).
+Pin a build with actual LFM3-Omni multimodal support and verify synchronized audio
+input, rather than assuming any generic local-model server supports it. Quality,
+latency and total memory on our tasks remain unmeasured.
+
+**Recommended architecture for an experiment:**
+
+- Reuse the existing React/TypeScript board, evidence model and controls inside
+  an Electron renderer. Keep the browser build usable as the demo/baseline.
+- Use a narrow preload bridge for specific media/inference operations. Keep Node
+  access out of the renderer and heavy jobs outside the UI/main event loop;
+  see [Electron's process model](https://www.electronjs.org/docs/latest/tutorial/process-model).
+- Let app-owned native `ffprobe`/`ffmpeg` processes inspect media, extract frames
+  and audio for a selected source range, and create disposable inference inputs.
+  Preserve original source timestamps when mapping results back to quotations.
+  Keep the existing TypeScript cut scorer until a deliberate parity-checked
+  backend change; native FFmpeg does not require changing the research model.
+- Let an app-owned compatible llama.cpp helper perform local inference; Apple
+  Silicon can use its [Metal backend](https://github.com/ggml-org/llama.cpp/blob/master/docs/build.md#metal-build).
+  Download a selected model on demand into an app-level cache, outside project
+  backups. Bound jobs/input size, support cancellation and shut helpers down on
+  app exit. One model service serves the board, not one model per card.
+- Preserve one original asset and source-linked clip ranges. Native filesystem
+  project storage can follow behind a small storage boundary; first establish a
+  stable desktop origin/user-data location and the existing v4 ZIP transfer path.
+  No destructive IndexedDB migration is implied by the desktop experiment.
+
+Native FFmpeg expands processing options, but Chromium's HTML video element still
+has its own playback codec support. Any compatibility proxy must be explicit and
+shared once per original; making clips continues to create no video copies.
+Packaging native binaries/model assets introduces platform/version maintenance,
+and a distributed desktop app needs packaging, signing and updates; preserve the
+[Electron distribution guidance](https://www.electronjs.org/docs/latest/tutorial/distribution-overview).
+Electron does not itself guarantee lower memory use or faster board interaction.
+
+**Proposed next slice:** open the current board in a minimal Electron shell,
+inspect generated media through native ffprobe, extract a bounded clip's video
+and audio, and ask LFM3-Omni for a description with text output. Return an editable
+memo with source/time references. Compare cold/warm latency, memory, useful
+observations, audio inclusion, cancellation and board/player responsiveness
+before committing to packaging a full model or changing storage/playback.
+Existing browser projects transfer by ZIP; no implicit access to another browser
+profile's IndexedDB. Manual coding and normal Undo remain authoritative.
 
 ## Optional multimodal companion · 7 November 2026
 

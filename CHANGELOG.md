@@ -60,6 +60,10 @@ qualitative video analysis.
 
 ### Changed
 
+- License the application under **GPL-3.0-only** from 8 November 2026, following
+  the decision to learn from ELAN under the same terms. Preserve the original
+  MIT notice, earlier releases' terms and third-party licenses. Add a compact
+  GPLv3 link to the hosted license, notices and corresponding source.
 - Prioritize the browser-based analysis workflow without LLMs. Defer Electron and
   model integration until the browser workflow and its limits are established.
 - Refactor the application into focused document/autosave, media/analysis,

@@ -37,6 +37,7 @@ button {
   cursor: pointer;
 }
 button:focus-visible,
+a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 [tabindex]:focus-visible {
@@ -848,6 +849,15 @@ body.is-dragging * {
 }
 .board-hint span {
   margin: 0 4px;
+}
+.license-link {
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.license-link:hover {
+  text-decoration: underline;
 }
 .notice {
   position: fixed;

@@ -13,6 +13,23 @@ deferred segmentation research. This document preserves implemented behavior,
 verification, performance evidence and recovery notes. The short
 [README](../README.md) is the public entrypoint.
 
+## Application license · 8 November 2026
+
+Daniel chose **GPL-3.0-only** for Video Board so that learning from ELAN's source
+can lead to sharing under the same terms. [NOTICE](../NOTICE) declares the
+application's copyright, license and warranty disclaimer; [LICENSE](../LICENSE)
+contains GPLv3. The original MIT notice is retained under `public/licenses/`;
+earlier release tags remain unchanged. Third-party components retain their
+own terms, including the LGPL scdet port and MIT FFmpeg/Wasm wrapper.
+
+The compact GPLv3 link opens `licenses/index.html` in the production build,
+with the license texts, notices, source ZIP and rebuild instructions. Builds
+from Git checkouts pin their source link to `HEAD`; downloaded source archives
+also build without Git and link to the public repository. Build from a clean
+checkout when publishing so that the source link identifies the deployed code.
+The Vite plugin emits the GPL text and scdet source; the retained MIT notice
+is copied from `public/`. No ELAN application code is included yet.
+
 ## Run
 
 ```sh
@@ -757,8 +774,10 @@ adds decode work, while playback and frame captures remain independent of its wo
 
 The numeric core in [src/scdet.ts](../src/scdet.ts) is a modified port of
 `get_scene_score` and the scalar SAD loop from FFmpeg **n8.1.2**, revision
-`38b88335f99e76ed89ff3c93f877fdefce736c13`. That file retains **LGPL-2.1-or-later**;
-the original Video Board application, preprocessing and UI remain **MIT**.
+`38b88335f99e76ed89ff3c93f877fdefce736c13`. That file retains **LGPL-2.1-or-later**.
+The original Video Board application, preprocessing and UI were **MIT** at the
+time of the port; they changed to **GPL-3.0-only** on 8 November 2026 as described
+above, with the original MIT notice preserved.
 The [notice](../public/licenses/ffmpeg/NOTICE.txt) links both upstream source files
 and describes the modifications. The production build ships the LGPL text,
 notice and complete port source under `licenses/ffmpeg/`; the repository contains

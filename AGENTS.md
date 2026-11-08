@@ -50,6 +50,10 @@ Keep the first prototype's implementation choices simple;
 rewriting application logic in Rust/Wasm remains a future option. Daniel chose a
 TypeScript port of FFmpeg's scdet on 4 November 2026. Keep the port in `src/scdet.ts` under its upstream
 LGPL-2.1-or-later terms, with the pinned revision, notices, license text and
-build-emitted source intact. The application/UI remain MIT. This port adds cut
+build-emitted source intact. Daniel chose GPL-3.0-only for the application/UI on
+8 November 2026 to share under ELAN's terms when learning from its code. Retain
+the original MIT notice and separate third-party terms; keep the hosted source
+and license links intact. ELAN source, tools and reference probes stay outside
+this Git directory and UNIverse. This port adds cut
 scoring, not FFmpeg codecs. Keep its native-reference fixtures and real-media
 browser checks; never regenerate expected scores with the port itself.

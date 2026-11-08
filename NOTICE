@@ -1,0 +1,23 @@
+Video Board — an experimental local-first workbench for qualitative video analysis
+Copyright (c) 2026 Daniel Pfurtscheller
+
+SPDX-License-Identifier: GPL-3.0-only
+
+Video Board is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, version 3 of the License. See LICENSE for the complete terms.
+
+Video Board is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+The application changed from MIT to GPL-3.0-only on 8 November 2026. Earlier
+releases retain their original terms. The original MIT copyright and permission
+notice is preserved in public/licenses/video-board-MIT.txt.
+
+Third-party components retain their own licenses and copyright notices. The
+FFmpeg scdet port remains LGPL-2.1-or-later; see public/licenses/ffmpeg/.
+The FFmpeg/Wasm wrapper remains MIT; its separately downloaded core and codec
+libraries retain their own terms. See public/licenses/ffmpeg-wasm/NOTICE.txt.
+
+Source and build instructions: https://github.com/dpfu/video-board

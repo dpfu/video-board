@@ -9,8 +9,8 @@ It is verified against the SHA-256 digests in src/ffmpeg.ts before execution.
 The core binaries are not copied into this application's distributed assets.
 
 The core package identifies its license as GPL-2.0-or-later and includes FFmpeg
-and external codec libraries. The application/wrapper's MIT license does not
-replace the core's license or the individual libraries' terms.
+and external codec libraries. Video Board is GPL-3.0-only; the wrapper remains
+MIT. Neither replaces the core's license or the individual libraries' terms.
 Package: https://www.npmjs.com/package/@ffmpeg/core/v/0.12.10
 Core source/build instructions and dependency versions:
 https://github.com/ffmpegwasm/ffmpeg.wasm/tree/main

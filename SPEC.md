@@ -30,7 +30,13 @@ Keep it compact, responsive and methodologically useful: **select → code → m
   The first application release is **0.0.1** / **v0.0.1**, explicitly experimental,
   using project schema v3. The current development build uses v4 for evidence
   spaces, with migration from v1–v3. Source code stays outside UNIverse; the local
-  dossier pointer remains in the development notes.
+  app checkout and external ELAN references stay outside the Cora repository too.
+  Only a compact working handoff belongs in the Tageszettel.
+- **GPL-3.0-only from 8 November 2026:** Daniel chose to share Video Board under
+  the same terms as ELAN when learning from its source. The earlier application
+  license was MIT; preserve its notice and the existing releases' terms. The
+  scdet port and other dependencies retain their own licenses. Keep source and
+  license access available in the hosted app; see [NOTICE](NOTICE).
 - Keep scope small. The original no-tests brief was superseded by Daniel's
   request for a focused suite. See [checks](docs/DEVELOPMENT.md#checks); browser checks use
   disposable contexts on 4193, separate from the working board on 5193.
@@ -243,6 +249,29 @@ Discuss the module's shared-row versus separate-track layout and the relationshi
 between annotation vocabularies and qualitative Codes with Daniel. Then agree a
 small manual workflow and the initial exchange profile using a real template.
 Only after that, implement one complete annotation/edit/reopen/exchange slice.
+
+Recommended implementation order, pending that discussion:
+
+1. **Compatibility foundation:** model independent timed tiers, free text and
+   local controlled vocabularies; read/write a deliberately limited EAF/ETF
+   profile. Check semantic roundtrips against the source-built ELAN reference,
+   including IDs, values, empty text, Unicode, media offsets and vocabulary
+   identities. Preserve or explicitly reject unsupported dependencies.
+2. **One complete editing workflow:** add a tier → mark a range → label it →
+   replay it → adjust its boundaries → Undo → save/reopen → exchange with ELAN.
+   Start with one dockable, aligned-row module and explicit time zoom if Daniel
+   accepts that layout. Keep new data in local storage and native project ZIPs.
+3. **Board integration and real scheme:** bring an annotation onto the board as
+   a linked clip, add still/region evidence and use existing coding/memo tools.
+   Inspect the actual Grzenkowicz–Wildfeuer template and representative EAF;
+   add the dependent tier rules it requires before claiming scheme support.
+
+The external ELAN reference has been compiled and a synthetic EAF/ETF probe has
+passed using its real reader, writer and validators. That verifies the reference
+harness, not Video Board interoperability. Keep upstream source, toolchains and
+probe outputs outside this project and UNIverse; record their local pointers
+only in the Tageszettel. No ELAN application code has yet been incorporated.
+
 LLMs, Electron, automatic semantic labeling, complex statistics and a full
 multi-coder workflow remain outside this first module draft.
 

@@ -17,5 +17,6 @@ complete port source as licenses/ffmpeg/scdet.ts. The repository contains its
 build configuration and lockfile for rebuilding with a modified port.
 
 Browser resizing/luma conversion, shot-range selection, UI and application
-integration are separate Video Board code under the repository's MIT license.
+integration are separate Video Board code under the repository's GPL-3.0-only
+license (originally MIT, changed on 8 November 2026).
 This is a cut-detector port, not an FFmpeg codec bundle.

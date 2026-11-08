@@ -319,6 +319,15 @@ export function AppShell({
               />
             </div>
           )}
+          <a
+            className="license-link"
+            href="./licenses/"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="License, notices and source code"
+          >
+            GPLv3
+          </a>
           <span className="board-hint">
             Header: move group <span>·</span> Grip: pull module free
           </span>

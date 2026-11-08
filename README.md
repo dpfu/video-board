@@ -49,7 +49,12 @@ board interactions separately.
 See the [working spec](SPEC.md) and [development notes](docs/DEVELOPMENT.md) for
 behavior, verification, performance measurements and limitations.
 
-Application: [MIT](LICENSE). The TypeScript port of FFmpeg's `scdet` scorer:
+Application: **[GPL-3.0-only](LICENSE)**, copyright © 2026 Daniel Pfurtscheller,
+provided without warranty; see [NOTICE](NOTICE). Earlier releases retain their
+[original MIT notice](public/licenses/video-board-MIT.txt). The app's GPLv3 link
+opens the license, notices and source for its build.
+
+The TypeScript port of FFmpeg's `scdet` scorer remains
 [LGPL-2.1-or-later](public/licenses/ffmpeg/COPYING.LGPLv2.1), with its
 [source notice](public/licenses/ffmpeg/NOTICE.txt). That scorer does not add codecs.
 The optional clip exporter uses a separately downloaded GPL FFmpeg/Wasm core;

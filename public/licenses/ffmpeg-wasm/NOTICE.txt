@@ -1,0 +1,26 @@
+Browser clip export uses the MIT-licensed @ffmpeg/ffmpeg wrapper, pinned to 0.12.15.
+Copyright (c) 2019 Jerome Wu. See MIT.txt in this directory.
+Source: https://github.com/ffmpegwasm/ffmpeg.wasm
+
+The separately licensed, unmodified @ffmpeg/core 0.12.10 single-threaded runtime
+is fetched on demand by the user's browser from jsDelivr's npm distribution:
+https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/
+It is verified against the SHA-256 digests in src/ffmpeg.ts before execution.
+The core binaries are not copied into this application's distributed assets.
+
+The core package identifies its license as GPL-2.0-or-later and includes FFmpeg
+and external codec libraries. The application/wrapper's MIT license does not
+replace the core's license or the individual libraries' terms.
+Package: https://www.npmjs.com/package/@ffmpeg/core/v/0.12.10
+Core source/build instructions and dependency versions:
+https://github.com/ffmpegwasm/ffmpeg.wasm/tree/main
+https://ffmpegwasm.netlify.app/docs/overview/
+License explanation: https://ffmpegwasm.netlify.app/docs/faq/
+
+Research videos are mounted read-only in the local worker. They are not uploaded
+to jsDelivr, npm, FFmpeg's maintainers, or an application server.
+The npm core package is installed only as a development/test dependency so the
+real runtime can be provided to disposable browser tests without external calls.
+
+The existing TypeScript scdet port retains its separate upstream LGPL notices
+and pinned source under ../ffmpeg/. It is unchanged by clip export.

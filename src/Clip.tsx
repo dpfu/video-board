@@ -4,6 +4,7 @@ import {
   BookOpen,
   Camera,
   CopyPlus,
+  Download,
   Pause,
   PinOff,
   Play,
@@ -48,6 +49,8 @@ export function Clip({
   onCode,
   onStop,
   onRate,
+  onExport,
+  exportBusy,
 }: {
   clip: ClipCard;
   video: VideoCard;
@@ -74,10 +77,13 @@ export function Clip({
   onCode: () => void;
   onStop: () => void;
   onRate: (rate: number) => void;
+  onExport: () => void;
+  exportBusy: boolean;
   poster?: string;
 }) {
   const { active: scrubbing, finish } = usePointerGesture<{ pointer: number }>();
   const [muted, setMuted] = useState(true);
+  const [rangeValid, setRangeValid] = useState(true);
   const rate = clip.rate || 1;
   const playback = usePlayback({
     active,
@@ -130,6 +136,13 @@ export function Clip({
         <span className="control-spacer" />
         <IconButton icon={BookOpen} label="Code clip" onClick={onCode} />
         <IconButton icon={CopyPlus} label="Duplicate clip view" onClick={onDuplicate} />
+        <IconButton
+          icon={Download}
+          label="Download clip as MP4"
+          title="Download clip as MP4 · up to 60 seconds / 720p; loads export tools on first use"
+          disabled={exportBusy || !rangeValid}
+          onClick={onExport}
+        />
         <IconButton icon={ArrowUpLeft} label="Show clip source" onClick={() => onJump(time)} />
         <UndockButton {...dockControls} />
         <IconButton icon={Trash2} label="Remove clip view" onClick={onDelete} />
@@ -272,6 +285,7 @@ export function Clip({
         max={video.duration}
         frames={video.frameTimes}
         onChange={onRange}
+        onValidityChange={setRangeValid}
         onEditStart={onEditStart}
       />
       <div className="clip-source">

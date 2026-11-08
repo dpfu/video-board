@@ -41,7 +41,7 @@ For a shorter iteration, use `npm test` or `npm run test:watch`; `npm run test:e
 builds and runs just the browser workflows. Browser tests start a separate server
 on **4193** and use fresh contexts, leaving the working board on **5193** alone.
 
-- **124 Vitest checks:** group movement, detaching, independent resizing, docking
+- **132 Vitest checks:** group movement, detaching, independent resizing, docking
   on four sides and at different zoom levels, legacy v1 migration, persistence
   and atomic rollback after a simulated storage failure; native FFmpeg score
   parity on 8/10-bit sequences, reusable buffers, geometry changes, 16-bit
@@ -63,8 +63,10 @@ on **4193** and use fresh contexts, leaving the working board on **5193** alone.
   cancelled import probes, native playback seek/loop/promise/listener cleanup,
   effect replay and retained seek/playback intent; spatial-index parity at negative,
   cell-edge and oversized coordinates, cached snap/full-scan parity for assemblies
-  and collisions across four zoom levels, stable ties and camera overscan bounds.
-- **41 Chromium workflows:** real-media import and analysis; synchronized resized
+  and collisions across four zoom levels, stable ties and camera overscan bounds;
+  valid clip-export ranges, invalid/nonfinite bounds, empty originals and the
+  export experiment's duration/source-size limits before runtime allocation.
+- **44 Chromium workflows:** real-media import and analysis; synchronized resized
   scrubbers and exact linked-still recapture; magnetic group interactions, Undo
   and reload; ZIP roundtrip, rejected incomplete backups and offscreen PNG export;
   known-cut detection, cached threshold adjustment, shot seeking and older boards;
@@ -93,7 +95,10 @@ on **4193** and use fresh contexts, leaving the working board on **5193** alone.
   Escape/retiming, autosave failure and next-edit recovery, and board capture loss;
   held movement with live connectors and bounded React commits, mid-gesture Undo,
   newly exposed evidence before pan release, grid/zoom alignment and immediate
-  reset, native-scroll isolation, and backups of the latest live geometry.
+  reset, native-scroll isolation, and backups of the latest live geometry;
+  actual FFmpeg/Wasm exports with decoded video/audio and source-frame comparison,
+  silent sources, cached offline reuse, cancellation/retry, invalid range drafts,
+  corrupt-runtime rejection and unchanged original/quotation data.
 
 The versioned [synthetic fixture](../e2e/fixtures/README.md) contains no private media.
 Browser workflows use the actual decoder, workers and IndexedDB. The unit storage
@@ -103,7 +108,15 @@ under ignored `tmp/playwright/`; open the HTML report with
 The development watcher excludes `tmp/`: generating HTML reports/traces there
 must not reload an active demo or discard its transient selection/draft.
 
-Verified on **bugglzwerg, 7 November 2026** after the interaction-speed pass:
+Verified on **bugglzwerg, 8 November 2026** after the browser clip-export experiment:
+`npm run check` passed formatting, **132 unit/storage checks, 44 Chromium workflows**,
+TypeScript and the production build. The three new workflows execute the real
+Wasm core, provided from the pinned development dependency through browser request
+routing; CI needs no live CDN. A separate fresh-context production walkthrough on
+4193 used the real CDN, followed by an offline export. Reviewed the clip/export
+interface and loading state. See the export section below for limits and evidence.
+
+Previously verified on **bugglzwerg, 7 November 2026** after the interaction-speed pass:
 `npm run check` passed formatting, **124 unit/storage checks, 41 Chromium workflows**,
 TypeScript and the production build. Reviewed the generated-media coding screenshot;
 the camera, fixed controls, linked stills and Codes panel remain aligned. The
@@ -158,8 +171,76 @@ The earlier shot-detector suite passed 28 checks in about 15 seconds; its visual
 inspection covered the resized Cuts module and PNG export. The initial
 pre-detector suite passed 18 checks in about 11 seconds after correcting a runner
 viewport mismatch.
-Automated coverage currently targets Chromium with VP9/Opus, not a codec/browser
-compatibility matrix.
+Automated coverage currently targets Chromium with generated VP9/Opus input and
+H.264/AAC export, not a codec/browser compatibility matrix.
+
+## Browser clip export
+
+**8 November 2026:** Daniel selected browser/workflow-first development without
+LLMs. Electron and model integration remain deferred; the earlier evaluations
+stay in the [spec](../SPEC.md#browser-workflow-first--8-november-2026).
+
+A clip's header now offers **Download clip as MP4**. It captures that quotation's
+source range when clicked and exports video plus optional audio as H.264/AAC MP4.
+This first experiment accepts clips up to **60 seconds**, originals up to
+**256 MiB**, and output within **1280 × 720**, preserving aspect ratio without
+upscaling. Accurate seeking/re-encoding avoids keyframe-only stream-copy cuts.
+The selected range is source time: player speed and preview mute do not alter
+the exported audio or playback rate. Clips, quotations and original files remain
+shared references; only an explicit download creates an additional video file.
+Invalid typed ranges disable the action. Focusing/blurring an unchanged timecode
+or restoring it with Escape no longer commits an edit or rounds its frame time.
+
+`src/app/useClipExport.ts` owns one cancellable job and snapshots its source/range.
+Editing and playback stay available. Removing the exporting view, starting project
+file work, changing the asset generation or disposing the owner cancels the job;
+late results cannot download into a replaced project. A visible status includes a
+Cancel action. Cancellation terminates the worker immediately. Execution is bounded
+to two minutes, and the entire job to three minutes, including loading. Failures
+leave a retryable action and the existing board intact.
+
+`src/ffmpeg.ts` loads **@ffmpeg/ffmpeg 0.12.15** lazily and creates a single-threaded
+worker for each explicit download. It runs on the existing static Pages host
+without cross-origin-isolation headers or SharedArrayBuffer. Its worker-only entry
+is deliberately JavaScript so upstream's worker TypeScript globals do not replace
+the application's DOM types. The original Blob is mounted read-only through
+WORKERFS, avoiding an initial whole-video `arrayBuffer()`/MEMFS copy. Encoded output
+still occupies worker memory until read; worker termination releases its temporary
+filesystem and all runtime object URLs are revoked.
+
+On first export, the browser downloads the pinned, unmodified **@ffmpeg/core
+0.12.10** JavaScript/Wasm assets (about **31 MiB**) from jsDelivr and verifies their
+SHA-256 digests before execution. CacheStorage `video-board-ffmpeg-0.12.10` retains
+verified tools and the local worker for reuse; no source media is cached there.
+Denied/full CacheStorage does not block an otherwise successful export. A missing
+network connection before caching, damaged bytes or unsupported media produce an
+error; no core is executed after an integrity failure. Browser storage can be
+evicted, so first-use offline availability is not promised.
+
+The MIT wrapper/worker are bundled with the app. The GPL core remains a separate
+CDN download, not a `.wasm` asset in `dist/`; the core npm package is a pinned
+development dependency solely for real-runtime tests. See the
+[runtime/license notice](../public/licenses/ffmpeg-wasm/NOTICE.txt) for upstream
+licenses, source/build links and the distinction from the existing LGPL scdet
+port. Hashes and exact asset URLs live in `src/ffmpeg.ts`.
+
+Three browser workflows exercise the real Wasm core using generated media. They
+decode H.264 video and AAC audio, compare the export's first decoded image with
+the selected source frame, check duration/non-silent audio, inspect silent-source
+output, verify original bytes/quotation data, export offline from cached tools,
+cancel a held first download while editing, retry, reject corrupt core bytes,
+and block/reset an invalid range draft. The independent unmocked-CDN walkthrough
+on production `/video-board/` with a fresh context and the four-second synthetic
+fixture observed exactly two external **GET** requests (both HTTP 200), then a
+successful offline export with no new external request, console error or alert.
+No media upload or private research data was involved. Its disposable evidence is
+under `tmp/ffmpeg-cdn/`; workflow evidence is under `tmp/playwright/`.
+
+This verifies the small export workflow on Chromium, not general Safari/Firefox
+compatibility, arbitrary codec imports or a speedup. Native player/WebCodecs
+analysis/capture and the TypeScript detector remain unchanged. Unsupported-import
+conversion, alternate detectors, automatic proxies and other processing features
+need separate workflow decisions rather than automatic whole-library processing.
 
 ## Interaction speed · 7 November 2026
 
@@ -635,8 +716,10 @@ demand during export. PNG remains a presentation image.
 ## Current: local shot detection · 4 November 2026
 
 Daniel chose to port FFmpeg's **scdet** scorer to TypeScript, keeping native
-browser decoding through Mediabunny/WebCodecs. There is no FFmpeg binary/Wasm
-dependency and this change does not extend the browser's codec support.
+browser decoding through Mediabunny/WebCodecs. This detection path has no FFmpeg
+binary/Wasm dependency and does not extend the browser's codec support. The
+[optional clip-export experiment](#browser-clip-export) added on 8 November uses
+FFmpeg/Wasm separately; it does not replace this scorer or decoding path.
 
 - New imports automatically scan consecutive frames in the analysis worker.
   The same sequential decode supplies frame timestamps and twelve thumbnails.

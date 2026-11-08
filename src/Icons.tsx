@@ -7,6 +7,7 @@ export function IconButton({
   label,
   children,
   className = '',
+  title,
   ...props
 }: {
   icon: LucideIcon;
@@ -19,7 +20,7 @@ export function IconButton({
       {...props}
       className={`icon-button ${className}`}
       aria-label={label}
-      title={label}
+      title={title ?? label}
     >
       <Icon size={18} aria-hidden="true" />
       {children}

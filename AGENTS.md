@@ -26,6 +26,10 @@ rather than starting parallel plan files. In particular, coded still
 regions remain retimeable with geometry fixed relative to the image; the earlier
 freeze-after-coding suggestion was rejected by Daniel.
 Region selection starts with manual rectangles; model segmentation is deferred.
+Daniel prioritized the browser workflow without LLMs on 8 November 2026;
+Electron/model integration is deferred. The optional FFmpeg/Wasm experiment
+starts with explicit clip downloads; keep normal playback, capture and the
+TypeScript shot detector independent of it. See the current plan in `SPEC.md`.
 Daniel added live code collections and provisional spatial groups on 6 November
 2026. Keep their members as shared quotation references, promotion explicit and
 undoable, and schema v4 migration/backup coverage intact. See `SPEC.md`.
@@ -43,8 +47,8 @@ Daniel authorized a public GitHub repository and GitHub Pages on 4 November
 GitHub Pages serves the tested `dist/` from `main`; PR checks must not deploy.
 The first published version is `0.0.1`, tagged `v0.0.1`, explicitly experimental.
 Keep the first prototype's implementation choices simple;
-Rust/Wasm remains a future option. Daniel chose a TypeScript port of FFmpeg's
-scdet on 4 November 2026. Keep the port in `src/scdet.ts` under its upstream
+rewriting application logic in Rust/Wasm remains a future option. Daniel chose a
+TypeScript port of FFmpeg's scdet on 4 November 2026. Keep the port in `src/scdet.ts` under its upstream
 LGPL-2.1-or-later terms, with the pinned revision, notices, license text and
 build-emitted source intact. The application/UI remain MIT. This port adds cut
 scoring, not FFmpeg codecs. Keep its native-reference fixtures and real-media

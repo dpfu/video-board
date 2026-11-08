@@ -11,6 +11,9 @@ Arrange videos, clips and linked stills on a spatial board. Scrub synchronized
 thumbnail, audio and shot-detection tracks; mark segments and rectangular image
 regions; add codes and memos; retrieve quotations and export PNG, CSV or a
 restorable project ZIP. Clip views share the original video data.
+Download a selected clip as MP4 using the experimental local FFmpeg/Wasm exporter
+(up to 60 seconds, 720p, originals up to 256 MB). First use downloads about 31 MB
+of tools from jsDelivr; media stays on the device and the tools are cached.
 
 Gather quotations into spatial groups, write a memo, and turn a group into a
 code. Live code collections follow its assignments while keeping your arrangement.
@@ -38,7 +41,7 @@ npm run test:e2e:install # Install Chromium once
 npm run check           # Formatting, unit/storage tests, build, browser tests
 ```
 
-The suite has **124 Vitest checks and 41 Playwright workflows**, using generated
+The suite has **132 Vitest checks and 44 Playwright workflows**, using generated
 media and disposable browser storage. GitHub Actions runs it on pushes and pull
 requests; passing builds of `main` deploy to Pages. `npm run benchmark` measures
 board interactions separately.
@@ -48,4 +51,6 @@ behavior, verification, performance measurements and limitations.
 
 Application: [MIT](LICENSE). The TypeScript port of FFmpeg's `scdet` scorer:
 [LGPL-2.1-or-later](public/licenses/ffmpeg/COPYING.LGPLv2.1), with its
-[source notice](public/licenses/ffmpeg/NOTICE.txt). It does not add FFmpeg codecs.
+[source notice](public/licenses/ffmpeg/NOTICE.txt). That scorer does not add codecs.
+The optional clip exporter uses a separately downloaded GPL FFmpeg/Wasm core;
+see its [runtime notice](public/licenses/ffmpeg-wasm/NOTICE.txt).

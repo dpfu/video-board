@@ -14,6 +14,7 @@ import { usePreviews } from './app/usePreviews';
 import { useProjectFiles } from './app/useProjectFiles';
 import { useProjectState } from './app/useProjectState';
 import { useViewport } from './app/useViewport';
+import { useClipExport } from './app/useClipExport';
 
 /** Compose owners in dependency order; each owner exposes stable, current-state actions. */
 export function App() {
@@ -21,6 +22,7 @@ export function App() {
   const project = useProjectState();
   const document = useDocument(!project.locked, setNotice);
   const assets = useAssets();
+  const clipExport = useClipExport(document, assets, project, setNotice);
   const viewport = useViewport(document);
   const editing = useEditing(document, viewport);
   const previews = usePreviews(document, project);
@@ -63,6 +65,7 @@ export function App() {
       registry: players.actions,
       reportEvidence: view.actions.reportEvidence,
       notice: setNotice,
+      exportClip: clipExport.actions.start,
     }),
     [
       document.actions,
@@ -74,6 +77,7 @@ export function App() {
       evidence.actions,
       players.actions,
       view.actions,
+      clipExport.actions,
     ],
   );
   return (
@@ -88,6 +92,7 @@ export function App() {
         evidence,
         project,
         files,
+        clipExport,
         notice,
         setNotice,
       }}
@@ -103,6 +108,7 @@ export function App() {
         sceneBusy={analysis.sceneBusy}
         busy={media.busy}
         editingLocked={project.locked}
+        exportBusy={clipExport.busy}
         preview={previews.view}
         activeQuotation={editing.activeQuotation}
         drawing={editing.drawing}

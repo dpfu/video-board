@@ -32,6 +32,7 @@ export type ModuleActions = {
   registry: Players['actions'];
   reportEvidence: (spaceId: string, ids: string[]) => void;
   notice: (message: string) => void;
+  exportClip: (id: string) => Promise<void>;
 };
 export type ModuleData = Pick<
   Board,
@@ -48,6 +49,7 @@ export type BoardModulesProps = {
   sceneBusy: Set<string>;
   busy: Set<string>;
   editingLocked: boolean;
+  exportBusy: boolean;
   preview: ReturnType<typeof previewView>;
   activeQuotation: string | null;
   drawing: string | null;
@@ -69,6 +71,7 @@ export const BoardModules = memo(function BoardModules({
   sceneBusy,
   busy,
   editingLocked,
+  exportBusy,
   preview,
   activeQuotation,
   drawing,
@@ -325,6 +328,8 @@ export const BoardModules = memo(function BoardModules({
                 active={preview?.id === clip.id}
                 pinned={preview?.id === clip.id && preview.pinned}
                 busy={busy.has(video.id) || editingLocked}
+                exportBusy={exportBusy || editingLocked}
+                onExport={() => void actions.exportClip(clip.id)}
                 dockControls={controlsFor(clip.id)}
                 onHover={(hover) => requestHover({ kind: 'clip', id: clip.id }, hover)}
                 onPin={() => {

@@ -7,6 +7,11 @@ qualitative video analysis.
 
 ### Added
 
+- Experimental **Download clip as MP4** action: local, cancellable FFmpeg/Wasm
+  export of the selected source range, with optional audio, up to 60 seconds and
+  720p from originals up to 256 MB. Board clips continue sharing the original.
+  Load and integrity-check the approximately 31 MB runtime only on demand; cache
+  it for reuse. Keep the original read-only and release the worker/temp data.
 - Live code collections: drag a code onto the board or open it from Codes to
   gather its videos, segments, stills and regions. New assignments appear
   automatically; existing evidence keeps its arranged position.
@@ -23,16 +28,22 @@ qualitative video analysis.
 - Groups, collection memos and arrangements in local storage, Undo and project
   ZIPs. PNG export fits each complete arrangement into its frame, including
   scrolled-out items. Additional views do not duplicate CSV quotation rows.
-- Expand coverage from 71 to **165 checks: 124 Vitest checks and 41 real-media
+- Expand coverage from 71 to **176 checks: 132 Vitest checks and 44 real-media
   Chromium workflows**. Include all manual/live transfer combinations, legacy
   ZIP migration, zoomed/scrolled drops, same-project restore, preview cleanup and
   decoded PNG content for scrolled-out evidence. Cover save ordering/recovery,
   asset/worker/playback disposal, inactive-clip scrubbing and shared time fields.
   Add cached-snap parity, continuous movement with bounded React commits, live
   culling/grid alignment, rapid zoom reset, Undo during a drag and backup flushing.
+  Exercise actual Wasm exports with audio and silent sources, decoded start-frame
+  content, offline reuse, cancellation/retry, runtime integrity failure and invalid
+  time drafts, plus size/duration/input bounds.
 
 ### Fixed
 
+- Do not change a quotation or recapture a frame when an unchanged formatted
+  timecode loses focus or Escape restores it. Invalid clip time drafts disable
+  MP4 export until corrected or reset.
 - Resume pending video analysis and interrupted cut detection after a failed
   project replacement, without reloading. Reopening a backup also resumes
   detection requested by an existing Cuts module.
@@ -49,6 +60,8 @@ qualitative video analysis.
 
 ### Changed
 
+- Prioritize the browser-based analysis workflow without LLMs. Defer Electron and
+  model integration until the browser workflow and its limits are established.
 - Refactor the application into focused document/autosave, media/analysis,
   evidence/editing, preview, viewport/gesture and project-file controllers.
   Separate shell, memoized board modules and shared card frames. Keep current

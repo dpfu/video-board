@@ -32,7 +32,9 @@ export function useTimecode(value: number, options: Options) {
       setInvalid(!valid);
       options.onValidity?.(valid);
       if (!valid) return;
-      options.onCommit(parsed);
+      // Focusing/blurring a formatted timestamp (or Escape) is not an edit.
+      // Its millisecond display can be less precise than the actual frame time.
+      if (text !== timecode(value) && parsed !== value) options.onCommit(parsed);
       if (options.formatOnCommit !== false) setText(timecode(value));
     },
     onKeyDown(event: KeyboardEvent<HTMLInputElement>) {

@@ -31,6 +31,7 @@ import type { Analysis } from './useAnalysis';
 import type { Evidence } from './useEvidence';
 import type { Project } from './useProjectState';
 import type { ProjectFiles } from './useProjectFiles';
+import type { ClipExport } from './useClipExport';
 
 type Props = {
   document: BoardDocument;
@@ -42,6 +43,7 @@ type Props = {
   evidence: Evidence;
   project: Project;
   files: ProjectFiles;
+  clipExport: ClipExport;
   notice: string;
   setNotice: (message: string) => void;
   children: ReactNode;
@@ -57,6 +59,7 @@ export function AppShell({
   evidence,
   project,
   files,
+  clipExport,
   notice,
   setNotice,
   children,
@@ -352,15 +355,21 @@ export function AppShell({
           }}
         />
       )}
-      {(notice || working || importing || operation) && (
+      {(notice || working || importing || operation || clipExport.busy) && (
         <div
           className={`notice ${notice ? 'notice--error' : ''}`}
           role={notice ? 'alert' : 'status'}
         >
           {notice ? <CircleAlert size={16} /> : <LoaderCircle size={16} className="spin" />}
           <span>
-            {notice || projectMessage(project.state) || (importing ? 'Adding video…' : working)}
+            {notice ||
+              projectMessage(project.state) ||
+              clipExport.status ||
+              (importing ? 'Adding video…' : working)}
           </span>
+          {clipExport.busy && (
+            <IconButton icon={X} label="Cancel clip export" onClick={clipExport.actions.cancel} />
+          )}
           {notice && <IconButton icon={X} label="Dismiss message" onClick={() => setNotice('')} />}
         </div>
       )}

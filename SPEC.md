@@ -57,10 +57,65 @@ unchanged.
 | Board performance | Implemented: viewport culling, bounded covers, live gesture painting and indexed snapping. On 7 November, dragging used 13.5–14.8× less JavaScript and 2.3–3.1× less main-thread task time against the refactored build; elapsed/frame timing did not improve materially. The earlier 4 November result and both protocols remain in development notes. |
 | Live code collections and provisional spatial groups | Implemented: linked mixed evidence, relative arrangement, memos, explicit promotion/reuse, virtualized previews and v4 ZIP/PNG support. |
 | Browser segmentation for proposing still regions | Deferred by Daniel for the first version; research retained below. |
-| Optional multimodal analysis companion | Proposed on 7 November: browser-side API integration with a user-supplied key, or local inference. Gemini and browser models are candidates; no integration or automatic coding is implemented. |
-| Desktop host and native media/model processing | Explored on 8 November: Electron with native FFmpeg and an LFM3-Omni runtime. Recommended small desktop experiment; no migration, native dependency or model download is implemented. |
+| Optional multimodal analysis companion | Deferred on 8 November: establish the browser workflow without LLMs first. Earlier model/API research remains below. |
+| Desktop host and native media/model processing | Deferred on 8 November: explore the browser's limits first, then revisit Electron/native processing. Earlier evaluation remains below. |
+| Browser FFmpeg/Wasm | Implemented experiment: explicit MP4 download of a source-linked clip, using an on-demand worker; up to 60 seconds / 720p from originals up to 256 MB. No automatic conversion or playback-engine replacement. |
+
+## Browser workflow first · 8 November 2026
+
+**Daniel's decision:** remain in the browser, establish the video-analysis workflow
+without LLMs, and learn how far this can go before revisiting Electron and model
+integration. This supersedes the recommended desktop experiment below as the next
+step. Preserve its rationale and the model research as deferred options.
+
+Daniel selected an FFmpeg experiment via the browser/Wasm route. Use WebAssembly
+through ffmpeg.wasm rather than the historical asm.js target. Keep the application
+in TypeScript and preserve local source-linked evidence and the existing fast
+native-browser player, capture and TypeScript cut-detection paths.
+
+**First implementation slice, implemented:** Download clip as MP4.
+
+1. Add a compact explicit action to a clip view. Export the quotation's selected
+   source range, with video and optional audio, into a playable MP4 download.
+   Creating/trimming/duplicating board clips continues to create no video copies;
+   export creates a separate deliverable only when requested.
+2. Load a pinned single-threaded FFmpeg/Wasm runtime on demand in a worker. It must
+   work on the current static GitHub Pages host without cross-origin-isolation
+   headers or SharedArrayBuffer. Keep the normal board startup free of its large
+   Wasm download.
+3. Use a read-only Blob/File mount for the original, bounded clip/resolution limits
+   for this experiment, a cancellable owned export, and disposal of worker/temp
+   data. Keep board editing and playback responsive while exporting.
+4. The MIT wrapper is bundled locally. Fetch the pinned, unmodified GPL core from
+   its distribution CDN when first needed, verify its bytes, and cache the runtime
+   for reuse; no research media is sent to that CDN. Do not mirror the GPL core
+   into our app's distributed assets as part of this initial experiment. Keep
+   upstream license/source links and make first-use loading visible.
+5. Check actual exported range, decoded video/audio, repeated/cancelled/failed
+   work, original-asset identity and unchanged quotation data. Browser tests use
+   the real Wasm core supplied from the pinned test dependency through request
+   routing, with generated media and disposable storage; they must not depend on
+   a live CDN. Run the full existing suite and inspect the actual interface.
+
+Verified on **8 November 2026**: formatting, TypeScript/build, **132 Vitest checks
+and 44 Chromium workflows** passed. The new workflows execute the actual Wasm
+core, decode the exported video/audio, compare its first frame with the selected
+source time, and cover silent input, cached offline reuse, cancellation/retry,
+invalid drafts and corrupt runtime bytes. A separate fresh-context walkthrough
+also exported through the real CDN and then offline, with two static GETs and
+no media upload. The compact interface and loading state were inspected.
+See [implementation and limits](docs/DEVELOPMENT.md#browser-clip-export).
+
+This establishes a reusable processing experiment, not universal codec support or
+a speedup claim. Native playback remains separate. Import conversion, alternate
+cut detection, automatic proxies and additional tools need their own useful next
+workflow; no automatic full-library processing, LLM dependency or desktop shell.
 
 ## Desktop host and LFM3-Omni · 8 November 2026
+
+**Deferred:** Daniel subsequently selected browser/workflow-first development
+without LLMs; see the current plan above. The evaluation below is retained for a
+later desktop decision.
 
 Daniel suggested [LiquidAI/LFM3-Omni-2B](https://huggingface.co/LiquidAI/LFM3-Omni-2B)
 and asked whether Electron would be a better host, including native FFmpeg and
@@ -124,6 +179,9 @@ Existing browser projects transfer by ZIP; no implicit access to another browser
 profile's IndexedDB. Manual coding and normal Undo remain authoritative.
 
 ## Optional multimodal companion · 7 November 2026
+
+**Deferred on 8 November:** establish the browser workflow without LLMs first.
+This research remains available for a later companion experiment.
 
 Daniel proposed Gemini or another video-capable model as an analysis companion,
 keeping the application in the client with a user-supplied API key. This is an
@@ -850,8 +908,10 @@ waveform/silence/freeze analysis, explicit clip-file export and compatibility
 proxies. Native FFmpeg offers a different deployment/file-access tradeoff from
 FFmpeg.wasm. A single shared proxy per original would still be an additional
 video derivative; it needs a deliberate decision under the no-copy preference.
-No FFmpeg processing engine, native helper or automatic proxy pipeline has been
-selected for this prototype. The interface can remain TypeScript either way.
+No processing engine or proxy pipeline was selected in that 4 November decision.
+On 8 November, Daniel selected the browser FFmpeg/Wasm experiment above, starting
+with explicit clip download. Detection stays on the TypeScript scorer; native
+helpers, import conversion and automatic proxies remain deferred.
 
 ## Segmentation-assisted still regions: researched option
 
